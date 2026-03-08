@@ -70,19 +70,25 @@ function extractText(html: string): string {
   // Remove script and style elements
   div.querySelectorAll("script, style").forEach((el) => el.remove());
   
-  // Get text with paragraph breaks preserved
+  // Get text with paragraph breaks preserved (avoid nested block duplication)
   const blocks: string[] = [];
-  div.querySelectorAll("p, h1, h2, h3, h4, h5, h6, div, li, blockquote").forEach((el) => {
-    const t = (el as HTMLElement).innerText?.trim();
+  div.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li, blockquote").forEach((el) => {
+    const t = (el as HTMLElement).innerText?.replace(/\s+/g, " ").trim();
     if (t) blocks.push(t);
   });
-  
-  // If no block elements found, fall back to textContent
+
+  // If no block elements found, fall back to full innerText
   if (blocks.length === 0) {
-    return div.textContent?.trim() ?? "";
+    return (div as HTMLElement).innerText?.trim() ?? "";
   }
-  
-  return blocks.join("\n\n");
+
+  // De-duplicate repeated blocks (common in some EPUB DOM structures)
+  const deduped = blocks.filter((block, idx) => {
+    const normalized = block.toLowerCase();
+    return idx === 0 || normalized !== blocks[idx - 1].toLowerCase();
+  });
+
+  return deduped.join("\n\n");
 }
 
 /**
