@@ -91,6 +91,9 @@ export function IntelligencePanel({
           {activeTab === "chat" && (
             <ChatTab key="chat" book={book} selectedSentence={selectedSentence} />
           )}
+          {activeTab === "research" && (
+            <ResearchPanel key="research" />
+          )}
         </AnimatePresence>
       </div>
     </aside>
