@@ -6,9 +6,6 @@
  * is unavailable (e.g., iframe environments without proper COOP/COEP headers).
  */
 
-import { RunAnywhere, SDKEnvironment } from '@runanywhere/web';
-import { ONNX } from '@runanywhere/web-onnx';
-
 export type TTSEngine = 'runanywhere' | 'webspeech' | 'none';
 
 interface TTSState {
@@ -26,7 +23,6 @@ let ttsState: TTSState = {
 };
 
 let initPromise: Promise<TTSEngine> | null = null;
-let currentUtterance: SpeechSynthesisUtterance | null = null;
 
 const VOICE_MODEL_BASE = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main';
 
@@ -41,15 +37,15 @@ export async function initTTS(): Promise<TTSEngine> {
 
     // Try RunAnywhere first
     try {
+      const { RunAnywhere, SDKEnvironment } = await import('@runanywhere/web');
+      const { ONNX, TTS } = await import('@runanywhere/web-onnx');
+
       await RunAnywhere.initialize({
         environment: SDKEnvironment.Development,
         debug: false,
       });
 
       await ONNX.register();
-
-      // Import TTS from the web package
-      const { TTS } = await import('@runanywhere/web');
 
       await TTS.loadVoice({
         voiceId: 'piper-en-lessac',
@@ -59,7 +55,7 @@ export async function initTTS(): Promise<TTSEngine> {
       });
 
       ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
-      console.log('[STORYWORLD] RunAnywhere TTS initialized');
+      console.log('[STORYWORLD] RunAnywhere TTS initialized (Piper neural voice)');
       return 'runanywhere' as TTSEngine;
     } catch (err) {
       console.warn('[STORYWORLD] RunAnywhere TTS unavailable, trying Web Speech API:', err);
@@ -67,6 +63,18 @@ export async function initTTS(): Promise<TTSEngine> {
 
     // Fallback to Web Speech API
     if ('speechSynthesis' in window) {
+      // Ensure voices are loaded
+      await new Promise<void>((resolve) => {
+        const voices = speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          resolve();
+        } else {
+          speechSynthesis.onvoiceschanged = () => resolve();
+          // Timeout in case event never fires
+          setTimeout(resolve, 1000);
+        }
+      });
+
       ttsState = { engine: 'webspeech', initialized: true, loading: false, error: null };
       console.log('[STORYWORLD] Using Web Speech API fallback');
       return 'webspeech' as TTSEngine;
@@ -80,7 +88,7 @@ export async function initTTS(): Promise<TTSEngine> {
 }
 
 /**
- * Synthesize and play a sentence.
+ * Synthesize and play a sentence. Returns a promise that resolves when speech ends.
  */
 export async function speakSentence(
   text: string,
@@ -97,14 +105,14 @@ export async function speakSentence(
 
   if (ttsState.engine === 'runanywhere') {
     try {
-      const { TTS, AudioPlayback } = await import('@runanywhere/web');
+      const { TTS, AudioPlayback } = await import('@runanywhere/web-onnx');
       const result = await TTS.synthesize(text, { speed });
       const player = new AudioPlayback();
-      player.onComplete(() => onEnd?.());
       await player.play(result.audioData, result.sampleRate);
+      player.dispose();
+      onEnd?.();
     } catch (err) {
-      console.error('[STORYWORLD] RunAnywhere TTS synthesis error:', err);
-      // Fall back to Web Speech
+      console.error('[STORYWORLD] RunAnywhere TTS synthesis error, falling back:', err);
       speakWithWebSpeech(text, speed, onEnd);
     }
   } else if (ttsState.engine === 'webspeech') {
@@ -123,14 +131,13 @@ function speakWithWebSpeech(text: string, speed: number, onEnd?: () => void) {
   // Try to pick a good English voice
   const voices = speechSynthesis.getVoices();
   const preferred = voices.find(
-    (v) => v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Google'))
-  ) || voices.find((v) => v.lang.startsWith('en'));
+    (v) => v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Google US'))
+  ) || voices.find((v) => v.lang.startsWith('en') && v.localService);
   if (preferred) utterance.voice = preferred;
 
   utterance.onend = () => onEnd?.();
   utterance.onerror = () => onEnd?.();
 
-  currentUtterance = utterance;
   speechSynthesis.speak(utterance);
 }
 
@@ -138,10 +145,9 @@ function speakWithWebSpeech(text: string, speed: number, onEnd?: () => void) {
  * Stop any current speech.
  */
 export function stopSpeaking() {
-  if (ttsState.engine === 'webspeech' || true) {
+  if ('speechSynthesis' in window) {
     speechSynthesis.cancel();
   }
-  currentUtterance = null;
 }
 
 /**
