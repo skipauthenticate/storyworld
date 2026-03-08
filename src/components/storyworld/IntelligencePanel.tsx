@@ -27,7 +27,7 @@ export function IntelligencePanel({
   onCloseThemes,
   className,
 }: IntelligencePanelProps) {
-  const [activeTab, setActiveTab] = useState<"annotation" | "characters" | "themes" | "chat">("annotation");
+  const [activeTab, setActiveTab] = useState<"annotation" | "characters" | "themes" | "chat" | "research">("annotation");
 
   useEffect(() => {
     if (showCharacters) setActiveTab("characters");
