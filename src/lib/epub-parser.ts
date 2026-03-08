@@ -27,7 +27,8 @@ function splitIntoSentences(text: string): string[] {
   
   return parts
     .map((s) => s.replace(/<<DOT>>/g, ".").trim())
-    .filter((s) => s.length > 5);
+    .filter((s) => s.length > 20)
+    .filter((s) => !/^(chapter\s+[\divxlc]+|table\s+of\s+contents|contents|§\s*\d+)$/i.test(s));
 }
 
 /**
