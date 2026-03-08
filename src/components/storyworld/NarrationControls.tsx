@@ -11,6 +11,7 @@ interface NarrationControlsProps {
   ttsLoading: boolean;
   voiceEnabled: boolean;
   intelligenceEnabled: boolean;
+  chapterLabel: string;
   onTogglePlay: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -30,6 +31,7 @@ export function NarrationControls({
   ttsLoading,
   voiceEnabled,
   intelligenceEnabled,
+  chapterLabel,
   onTogglePlay,
   onPrevious,
   onNext,
@@ -85,37 +87,38 @@ export function NarrationControls({
         </div>
 
         {/* Center: playback controls */}
-        <div className="flex items-center gap-3" role="group" aria-label="Playback controls">
-          <button
-            onClick={onPrevious}
-            disabled={!voiceEnabled}
-            className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
-            aria-label="Previous sentence"
-          >
-            <SkipBack className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onTogglePlay}
-            disabled={!voiceEnabled || ttsLoading || ttsEngine === 'none'}
-            className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30"
-            aria-label={isPlaying ? "Pause narration" : "Play narration"}
-          >
-            {ttsLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : isPlaying ? (
-              <Pause className="w-4 h-4" />
-            ) : (
-              <Play className="w-4 h-4 ml-0.5" />
-            )}
-          </button>
-          <button
-            onClick={onNext}
-            disabled={!voiceEnabled}
-            className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
-            aria-label="Next sentence"
-          >
-            <SkipForward className="w-4 h-4" />
-          </button>
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex items-center gap-3" role="group" aria-label="Playback controls">
+            <button
+              onClick={onPrevious}
+              className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+              aria-label="Previous sentence"
+            >
+              <SkipBack className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onTogglePlay}
+              disabled={!voiceEnabled || ttsLoading || ttsEngine === 'none'}
+              className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30"
+              aria-label={isPlaying ? "Pause narration" : "Play narration"}
+            >
+              {ttsLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isPlaying ? (
+                <Pause className="w-4 h-4" />
+              ) : (
+                <Play className="w-4 h-4 ml-0.5" />
+              )}
+            </button>
+            <button
+              onClick={onNext}
+              className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+              aria-label="Next sentence"
+            >
+              <SkipForward className="w-4 h-4" />
+            </button>
+          </div>
+          <span className="text-[9px] font-mono text-muted-foreground">{chapterLabel}</span>
         </div>
 
         {/* Right: speed + sentence counter */}
