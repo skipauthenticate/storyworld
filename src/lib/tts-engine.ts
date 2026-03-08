@@ -59,11 +59,10 @@ export async function initTTS(): Promise<TTSEngine> {
         name: 'Piper EN US Lessac Medium',
         url: VOICE_MODEL_URL,
         modality: ModelCategory.SpeechSynthesis,
-        isArchive: false,
         additionalFiles: [
           { filename: 'tokens.txt', url: TOKENS_URL },
         ],
-      }]);
+      } as any]);
 
       // Check if already downloaded
       const models = ModelManager.getModels();
