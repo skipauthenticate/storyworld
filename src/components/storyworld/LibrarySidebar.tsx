@@ -1,5 +1,5 @@
 import { Book, Chapter } from "@/data/sampleBooks";
-import { BookOpen, ChevronRight, Users, Sparkles, Menu } from "lucide-react";
+import { BookOpen, ChevronRight, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -12,8 +12,6 @@ interface LibrarySidebarProps {
   activeChapterId: string | null;
   onSelectBook: (book: Book) => void;
   onSelectChapter: (chapter: Chapter) => void;
-  onShowCharacters: () => void;
-  onShowThemes?: () => void;
 }
 
 function SidebarContent({
@@ -22,8 +20,6 @@ function SidebarContent({
   activeChapterId,
   onSelectBook,
   onSelectChapter,
-  onShowCharacters,
-  onShowThemes,
   onItemClick,
 }: LibrarySidebarProps & { onItemClick?: () => void }) {
   const [expandedBook, setExpandedBook] = useState<string | null>(activeBook?.id ?? null);
@@ -41,7 +37,7 @@ function SidebarContent({
       </div>
 
       {/* Library */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Book library">
         <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-1">
           Library
         </p>
@@ -62,6 +58,7 @@ function SidebarContent({
                   book.chapters.length === 0 && "opacity-50 cursor-not-allowed"
                 )}
                 disabled={book.chapters.length === 0}
+                aria-current={activeBook?.id === book.id ? "true" : undefined}
               >
                 <div
                   className="w-6 h-8 rounded-sm flex-shrink-0 flex items-center justify-center"
@@ -111,6 +108,7 @@ function SidebarContent({
                               ? "text-primary bg-primary/5"
                               : "text-muted-foreground hover:text-foreground"
                           )}
+                          aria-current={activeChapterId === ch.id ? "page" : undefined}
                         >
                           {ch.title}
                         </button>
@@ -122,29 +120,7 @@ function SidebarContent({
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Bottom actions */}
-      {activeBook && activeBook.characters.length > 0 && (
-        <div className="px-3 py-3 border-t border-border space-y-1">
-          <button
-            onClick={() => { onShowCharacters(); onItemClick?.(); }}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-          >
-            <Users className="w-4 h-4" />
-            <span>Characters</span>
-            <span className="ml-auto text-[10px] text-muted-foreground">{activeBook.characters.length}</span>
-          </button>
-          <button
-            onClick={() => { onShowThemes?.(); onItemClick?.(); }}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Themes</span>
-            <span className="ml-auto text-[10px] text-muted-foreground">{activeBook.themes.length}</span>
-          </button>
-        </div>
-      )}
+      </nav>
     </div>
   );
 }
@@ -159,6 +135,7 @@ export function LibrarySidebar(props: LibrarySidebarProps) {
         <button
           onClick={() => setOpen(true)}
           className="fixed top-3 left-3 z-50 p-2 rounded-lg bg-card border border-border text-foreground shadow-lg"
+          aria-label="Open library menu"
         >
           <Menu className="w-5 h-5" />
         </button>

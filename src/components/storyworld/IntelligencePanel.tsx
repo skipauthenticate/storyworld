@@ -9,84 +9,62 @@ import { ResearchPanel } from "./ResearchPanel";
 interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
   book: Book;
-  showCharacters: boolean;
-  showThemes?: boolean;
   onClose: () => void;
-  onCloseCharacters: () => void;
-  onCloseThemes?: () => void;
   className?: string;
 }
 
 export function IntelligencePanel({
   selectedSentence,
   book,
-  showCharacters,
-  showThemes,
   onClose,
-  onCloseCharacters,
-  onCloseThemes,
   className,
 }: IntelligencePanelProps) {
-  const [activeTab, setActiveTab] = useState<"annotation" | "characters" | "themes" | "chat" | "research">("annotation");
-
-  useEffect(() => {
-    if (showCharacters) setActiveTab("characters");
-  }, [showCharacters]);
-
-  useEffect(() => {
-    if (showThemes) setActiveTab("themes");
-  }, [showThemes]);
+  const [activeTab, setActiveTab] = useState<"context" | "chat" | "research">("context");
 
   const tabs = [
-    { id: "annotation" as const, label: "Annotation", icon: BookOpen },
-    { id: "characters" as const, label: "Characters", icon: User },
-    { id: "themes" as const, label: "Themes", icon: Sparkles },
-    { id: "chat" as const, label: "AI Chat", icon: Brain },
+    { id: "context" as const, label: "Context", icon: BookOpen },
+    { id: "chat" as const, label: "Chat", icon: Brain },
     { id: "research" as const, label: "Research", icon: FlaskConical },
   ];
 
   return (
-    <aside className={cn("w-[340px] min-w-[340px] h-full flex flex-col border-l border-border bg-card overflow-hidden", className)}>
+    <aside className={cn("w-[340px] min-w-[340px] h-full flex flex-col border-l border-border bg-card overflow-hidden", className)} role="complementary" aria-label="Intelligence panel">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
           Intelligence
         </p>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close intelligence panel">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[10px] font-mono transition-colors border-b-2",
+              "flex-1 flex items-center justify-center gap-1.5 py-3 text-[11px] font-mono transition-colors border-b-2",
               activeTab === tab.id
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
-            <tab.icon className="w-3 h-3" />
+            <tab.icon className="w-3.5 h-3.5" />
             {tab.label}
           </button>
         ))}
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" role="tabpanel">
         <AnimatePresence mode="wait">
-          {activeTab === "annotation" && (
-            <AnnotationTab key="annotation" selectedSentence={selectedSentence} />
-          )}
-          {activeTab === "characters" && (
-            <CharactersTab key="characters" book={book} />
-          )}
-          {activeTab === "themes" && (
-            <ThemesTab key="themes" book={book} />
+          {activeTab === "context" && (
+            <ContextTab key="context" selectedSentence={selectedSentence} book={book} />
           )}
           {activeTab === "chat" && (
             <ChatTab key="chat" book={book} selectedSentence={selectedSentence} />
@@ -100,15 +78,19 @@ export function IntelligencePanel({
   );
 }
 
-function AnnotationTab({ selectedSentence }: { selectedSentence: Sentence | null }) {
+/**
+ * Merged Context tab: Annotation + Characters + Themes in a single scrollable view
+ */
+function ContextTab({ selectedSentence, book }: { selectedSentence: Sentence | null; book: Book }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.2 }}
-      className="p-4"
+      className="p-4 space-y-6"
     >
+      {/* Annotation section */}
       {selectedSentence ? (
         <div className="space-y-4">
           <div className="p-3 rounded bg-muted/50 border border-border">
@@ -147,76 +129,67 @@ function AnnotationTab({ selectedSentence }: { selectedSentence: Sentence | null
           )}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-48 text-center">
-          <MessageSquare className="w-8 h-8 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col items-center justify-center h-32 text-center">
+          <MessageSquare className="w-6 h-6 text-muted-foreground/30 mb-2" />
+          <p className="text-[12px] text-muted-foreground">
             Tap any sentence to see its annotation
-          </p>
-          <p className="text-[11px] text-muted-foreground/60 mt-1">
-            Literary analysis, character insights, and cross-references
           </p>
         </div>
       )}
-    </motion.div>
-  );
-}
 
-function CharactersTab({ book }: { book: Book }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2 }}
-      className="space-y-3 p-4"
-    >
-      {book.characters.map((char) => (
-        <div
-          key={char.id}
-          className="p-3 rounded border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
-        >
-          <div className="flex items-center gap-2 mb-1.5">
-            <div
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: char.color }}
-            />
-            <span className="text-[14px] font-semibold">{char.name}</span>
-          </div>
-          <p className="text-[12px] leading-relaxed text-muted-foreground">
-            {char.description}
+      {/* Divider */}
+      <div className="h-px bg-border" />
+
+      {/* Characters section */}
+      {book.characters.length > 0 && (
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground mb-3 flex items-center gap-1.5">
+            <User className="w-3 h-3" />
+            Characters
           </p>
-          {char.appearances.length > 0 && (
-            <p className="text-[10px] font-mono text-muted-foreground/60 mt-2">
-              Appears in Ch. {char.appearances.join(", ")}
-            </p>
-          )}
+          <div className="space-y-2">
+            {book.characters.map((char) => (
+              <div
+                key={char.id}
+                className="p-2.5 rounded border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: char.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="text-[13px] font-semibold">{char.name}</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {char.description}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
-      ))}
-    </motion.div>
-  );
-}
+      )}
 
-function ThemesTab({ book }: { book: Book }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2 }}
-      className="space-y-2 p-4"
-    >
-      <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground mb-3">
-        Major Themes
-      </p>
-      {book.themes.map((theme, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-3 p-3 rounded border border-border bg-muted/20 hover:bg-muted/40 transition-colors"
-        >
-          <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-          <span className="text-[13px]">{theme}</span>
+      {/* Themes section */}
+      {book.themes.length > 0 && (
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground mb-3 flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3" />
+            Themes
+          </p>
+          <div className="space-y-1.5">
+            {book.themes.map((theme, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2.5 p-2 rounded border border-border bg-muted/20 hover:bg-muted/40 transition-colors"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" aria-hidden="true" />
+                <span className="text-[12px]">{theme}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      ))}
+      )}
     </motion.div>
   );
 }
@@ -386,7 +359,7 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
             disabled={isGenerating}
           />
           {isGenerating ? (
-            <button onClick={cancel} className="text-destructive hover:text-destructive/80">
+            <button onClick={cancel} className="text-destructive hover:text-destructive/80" aria-label="Cancel generation">
               <X className="w-3.5 h-3.5" />
             </button>
           ) : (
@@ -394,6 +367,7 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
               onClick={handleSend}
               disabled={!input.trim()}
               className="text-primary hover:text-primary/80 disabled:text-muted-foreground/30"
+              aria-label="Send message"
             >
               <Send className="w-3.5 h-3.5" />
             </button>

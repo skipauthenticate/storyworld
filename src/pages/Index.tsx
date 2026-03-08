@@ -22,8 +22,6 @@ const Index = () => {
   const [intelligenceEnabled, setIntelligenceEnabled] = useState(true);
   const [speed, setSpeed] = useState(1.0);
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
-  const [showCharacters, setShowCharacters] = useState(false);
-  const [showThemes, setShowThemes] = useState(false);
   const isMobile = useIsMobile();
 
   const allSentences = activeChapter?.scenes.flatMap((s) => s.sentences) ?? [];
@@ -84,7 +82,6 @@ const Index = () => {
   const handleSelectChapter = useCallback((chapter: Chapter) => {
     setActiveChapter(chapter);
     setSelectedSentence(null);
-    // Silently trigger background improvement on chapter change
     triggerImprovement("annotations");
   }, [triggerImprovement]);
 
@@ -92,12 +89,8 @@ const Index = () => {
     setSelectedSentence(sentence);
     const idx = allSentences.findIndex((s) => s.id === sentence.id);
     if (idx >= 0) goToSentence(idx);
-    if (intelligenceEnabled) {
-      // already visible
-    }
-    // Silently trigger background improvement on sentence interaction
     triggerImprovement("annotations");
-  }, [allSentences, intelligenceEnabled, goToSentence, triggerImprovement]);
+  }, [allSentences, goToSentence, triggerImprovement]);
 
   const handleTogglePlay = useCallback(() => {
     if (!voiceEnabled) setVoiceEnabled(true);
@@ -129,25 +122,19 @@ const Index = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-2 focus:bg-primary focus:text-primary-foreground">
+        Skip to content
+      </a>
+
       <LibrarySidebar
         books={books}
         activeBook={activeBook}
         activeChapterId={activeChapter?.id ?? null}
         onSelectBook={handleSelectBook}
         onSelectChapter={handleSelectChapter}
-        onShowCharacters={() => {
-          setShowCharacters(true);
-          setShowThemes(false);
-          setIntelligenceEnabled(true);
-        }}
-        onShowThemes={() => {
-          setShowThemes(true);
-          setShowCharacters(false);
-          setIntelligenceEnabled(true);
-        }}
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div id="main-content" className="flex-1 flex flex-col overflow-hidden">
         {activeChapter ? (
           <>
             <ReadingPanel
@@ -184,11 +171,7 @@ const Index = () => {
         <IntelligencePanel
           selectedSentence={selectedSentence}
           book={activeBook}
-          showCharacters={showCharacters}
-          showThemes={showThemes}
           onClose={() => setIntelligenceEnabled(false)}
-          onCloseCharacters={() => setShowCharacters(false)}
-          onCloseThemes={() => setShowThemes(false)}
         />
       )}
 
@@ -198,6 +181,7 @@ const Index = () => {
             <button
               onClick={() => setIntelligenceEnabled(true)}
               className="fixed bottom-20 right-3 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg"
+              aria-label="Open intelligence panel"
             >
               <Brain className="w-4 h-4" />
             </button>
@@ -207,11 +191,7 @@ const Index = () => {
               <IntelligencePanel
                 selectedSentence={selectedSentence}
                 book={activeBook}
-                showCharacters={showCharacters}
-                showThemes={showThemes}
                 onClose={() => setIntelligenceEnabled(false)}
-                onCloseCharacters={() => setShowCharacters(false)}
-                onCloseThemes={() => setShowThemes(false)}
                 className="w-full min-w-0 border-l-0"
               />
             </SheetContent>

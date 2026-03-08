@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { X, Keyboard } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -8,9 +8,6 @@ const hints = [
   { keys: ["Space"], action: "Play / Pause narration" },
   { keys: ["←"], action: "Previous sentence" },
   { keys: ["→"], action: "Next sentence" },
-  { keys: ["⌘", "1"], action: "Classic mode" },
-  { keys: ["⌘", "2"], action: "Narrated mode" },
-  { keys: ["⌘", "3"], action: "Immersive mode" },
 ];
 
 export function KeyboardHints() {
@@ -25,8 +22,9 @@ export function KeyboardHints() {
     <>
       <button
         onClick={() => setVisible(true)}
-        className="fixed bottom-4 right-4 z-40 p-2 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground transition-colors shadow-lg"
+        className="fixed bottom-4 left-4 z-40 p-2 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground transition-colors shadow-lg"
         title="Keyboard shortcuts"
+        aria-label="Show keyboard shortcuts"
       >
         <Keyboard className="w-4 h-4" />
       </button>
@@ -37,13 +35,15 @@ export function KeyboardHints() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
-            className="fixed bottom-14 right-4 z-50 w-64 bg-card border border-border rounded-lg shadow-xl p-4"
+            className="fixed bottom-14 left-4 z-50 w-64 bg-card border border-border rounded-lg shadow-xl p-4"
+            role="dialog"
+            aria-label="Keyboard shortcuts"
           >
             <div className="flex items-center justify-between mb-3">
               <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground">
                 Shortcuts
               </p>
-              <button onClick={() => setVisible(false)} className="text-muted-foreground hover:text-foreground">
+              <button onClick={() => setVisible(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close shortcuts">
                 <X className="w-3 h-3" />
               </button>
             </div>
