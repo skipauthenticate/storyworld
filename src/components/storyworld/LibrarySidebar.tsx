@@ -5,6 +5,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface LibrarySidebarProps {
   books: Book[];
@@ -29,6 +39,7 @@ function SidebarContent({
   onItemClick,
 }: LibrarySidebarProps & { onItemClick?: () => void }) {
   const [expandedBook, setExpandedBook] = useState<string | null>(activeBook?.id ?? null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -105,9 +116,7 @@ function SidebarContent({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`Remove "${book.title}" from library?`)) {
-                        onDeleteBook(book.id);
-                      }
+                      setDeleteTarget({ id: book.id, title: book.title });
                     }}
                     className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
                     aria-label={`Delete ${book.title}`}
@@ -115,17 +124,13 @@ function SidebarContent({
                     <Trash2 className="w-3 h-3" />
                   </button>
                 )}
-                {book.chapters.length > 0 ? (
+                {book.chapters.length > 0 && (
                   <ChevronRight
                     className={cn(
                       "w-3 h-3 text-muted-foreground transition-transform",
                       expandedBook === book.id && "rotate-90"
                     )}
                   />
-                ) : (
-                  <span className="text-[8px] font-mono uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                    Soon
-                  </span>
                 )}
               </button>
 
@@ -166,6 +171,30 @@ function SidebarContent({
           ))}
         </div>
       </nav>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove book</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove "{deleteTarget?.title}" from your library? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTarget) onDeleteBook(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

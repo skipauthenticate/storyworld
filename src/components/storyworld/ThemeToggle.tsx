@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Sun, Moon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className?: string }) {
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window !== "undefined") {
       return document.documentElement.classList.contains("light") ? "light" : "dark";
@@ -10,11 +11,7 @@ export function ThemeToggle() {
   });
 
   useEffect(() => {
-    if (theme === "light") {
-      document.documentElement.classList.add("light");
-    } else {
-      document.documentElement.classList.remove("light");
-    }
+    document.documentElement.classList.toggle("light", theme === "light");
     try { localStorage.setItem("storyworld-theme", theme); } catch {}
   }, [theme]);
 
@@ -28,7 +25,10 @@ export function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="fixed top-3 right-3 z-40 p-2 rounded-lg bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-lg"
+      className={cn(
+        "p-1.5 rounded-md text-muted-foreground hover:text-foreground transition-colors",
+        className
+      )}
       title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
     >

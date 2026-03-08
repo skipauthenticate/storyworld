@@ -1,5 +1,5 @@
 import { Sentence, Book } from "@/data/sampleBooks";
-import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Zap, ChevronUp, AlertCircle } from "lucide-react";
+import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Zap, ChevronUp, AlertCircle, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
@@ -32,7 +32,7 @@ export function IntelligencePanel({
         </button>
       </div>
 
-      {/* Context content — scrollable, shrinks when chat is expanded */}
+      {/* Context content */}
       <div className={cn("overflow-y-auto transition-all", chatExpanded ? "flex-shrink-0 max-h-[35%]" : "flex-1")}>
         <ContextContent selectedSentence={selectedSentence} book={book} />
       </div>
@@ -49,6 +49,8 @@ export function IntelligencePanel({
 }
 
 function ContextContent({ selectedSentence, book }: { selectedSentence: Sentence | null; book: Book }) {
+  const hasEnrichment = book.characters.length > 0 || book.themes.length > 0;
+
   return (
     <div className="p-4 space-y-6">
       {/* Annotation section */}
@@ -93,12 +95,24 @@ function ContextContent({ selectedSentence, book }: { selectedSentence: Sentence
         <div className="flex flex-col items-center justify-center h-32 text-center">
           <MessageSquare className="w-6 h-6 text-muted-foreground/30 mb-2" />
           <p className="text-[12px] text-muted-foreground">
-            Tap any sentence to see its annotation
+            {hasEnrichment
+              ? "Tap any sentence to see its annotation"
+              : "Tap any sentence to view its details"}
           </p>
         </div>
       )}
 
       <div className="h-px bg-border" />
+
+      {/* No enrichment notice */}
+      {!hasEnrichment && (
+        <div className="flex flex-col items-center text-center py-3 px-2">
+          <BookOpen className="w-5 h-5 text-muted-foreground/40 mb-2" />
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            This book was imported without enrichment data. Use AI Chat below to discuss themes, characters, and literary analysis.
+          </p>
+        </div>
+      )}
 
       {/* Characters */}
       {book.characters.length > 0 && (
@@ -142,9 +156,6 @@ function ContextContent({ selectedSentence, book }: { selectedSentence: Sentence
   );
 }
 
-/**
- * Persistent chat — always pinned at bottom. Collapsed: just input bar. Expanded: messages + input.
- */
 function PersistentChat({
   book,
   selectedSentence,
@@ -177,14 +188,12 @@ function PersistentChat({
     }
   }, [messages]);
 
-  const systemPrompt = `You are a literary analysis AI assistant embedded in a reading app called Storyworld. You are currently helping the reader analyze "${book.title}" by ${book.author}. The book's themes include: ${book.themes.join(', ')}. Characters include: ${book.characters.map(c => `${c.name} (${c.description})`).join('; ')}. ${selectedSentence ? `The reader has selected this passage: "${selectedSentence.text}"` : ''} Provide insightful, concise literary analysis. Keep responses under 150 words.`;
+  const systemPrompt = `You are a literary analysis AI assistant embedded in a reading app called Storyworld. You are currently helping the reader analyze "${book.title}" by ${book.author}.${book.themes.length > 0 ? ` The book's themes include: ${book.themes.join(', ')}.` : ''}${book.characters.length > 0 ? ` Characters include: ${book.characters.map(c => `${c.name} (${c.description})`).join('; ')}.` : ''} ${selectedSentence ? `The reader has selected this passage: "${selectedSentence.text}"` : ''} Provide insightful, concise literary analysis. Keep responses under 150 words.`;
 
   const handleSend = async () => {
     if (!input.trim() || isGenerating) return;
     if (engineStatus !== 'ready') {
-      try {
-        await initEngine();
-      } catch (err) {
+      try { await initEngine(); } catch (err) {
         console.warn('[IntelligencePanel] initEngine failed:', err);
       }
       return;
@@ -202,7 +211,7 @@ function PersistentChat({
         e.preventDefault();
         handleSend();
       }
-    } catch (_) { /* ignore keyboard handler errors */ }
+    } catch (_) {}
   };
 
   const isLoading = engineStatus === 'downloading' || engineStatus === 'loading';
@@ -210,7 +219,6 @@ function PersistentChat({
 
   return (
     <div className={cn("border-t border-border bg-card flex flex-col", expanded && "flex-1 min-h-0")}>
-      {/* Expand/collapse header */}
       <button
         onClick={onToggleExpand}
         className="flex items-center justify-between px-4 py-2 hover:bg-muted/30 transition-colors"
@@ -233,7 +241,6 @@ function PersistentChat({
         <ChevronUp className={cn("w-3 h-3 text-muted-foreground transition-transform", !expanded && "rotate-180")} />
       </button>
 
-      {/* Expanded chat messages */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -293,7 +300,6 @@ function PersistentChat({
         )}
       </AnimatePresence>
 
-      {/* Always-visible input */}
       <div className="px-3 pb-3 pt-1">
         <div className="flex items-center gap-2 px-3 py-2 rounded bg-muted/50 border border-border">
           <input

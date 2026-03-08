@@ -1,23 +1,32 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { sampleBooks, Book, Chapter, Sentence } from "@/data/sampleBooks";
 import { LibrarySidebar } from "@/components/storyworld/LibrarySidebar";
-import { ReadingPanel } from "@/components/storyworld/ReadingPanel";
+import { ReadingPanel, FontSize } from "@/components/storyworld/ReadingPanel";
 import { NarrationControls } from "@/components/storyworld/NarrationControls";
 import { IntelligencePanel } from "@/components/storyworld/IntelligencePanel";
 import { WelcomeScreen } from "@/components/storyworld/WelcomeScreen";
-import { KeyboardHints } from "@/components/storyworld/KeyboardHints";
 import { useNarration } from "@/hooks/useNarration";
 import { useReadingProgress } from "@/hooks/useReadingProgress";
 import { useAutoResearch } from "@/hooks/useAutoResearch";
+import { useBookLibrary } from "@/hooks/useBookLibrary";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Zap } from "lucide-react";
-import { ThemeToggle } from "@/components/storyworld/ThemeToggle";
 import { parseEpub } from "@/lib/epub-parser";
 import { toast } from "sonner";
 
+const FONT_SIZE_KEY = "storyworld-font-size";
+
+function loadFontSize(): FontSize {
+  try {
+    const v = localStorage.getItem(FONT_SIZE_KEY);
+    if (v === "small" || v === "medium" || v === "large") return v;
+  } catch {}
+  return "medium";
+}
+
 const Index = () => {
-  const [books, setBooks] = useState<Book[]>(sampleBooks);
+  const { books, addBook, removeBook } = useBookLibrary();
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
@@ -25,11 +34,25 @@ const Index = () => {
   const [speed, setSpeed] = useState(1.0);
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
   const [importing, setImporting] = useState(false);
+  const [fontSize, setFontSize] = useState<FontSize>(loadFontSize);
   const isMobile = useIsMobile();
+
+  const pendingSentenceRef = useRef<number | null>(null);
+  const autoAdvanceRef = useRef(false);
 
   const allSentences = activeChapter?.scenes.flatMap((s) => s.sentences) ?? [];
 
   const { triggerImprovement } = useAutoResearch();
+
+  const handleChapterEnd = useCallback(() => {
+    if (!activeBook || !activeChapter) return;
+    const idx = activeBook.chapters.findIndex((c) => c.id === activeChapter.id);
+    if (idx < activeBook.chapters.length - 1) {
+      autoAdvanceRef.current = true;
+      setActiveChapter(activeBook.chapters[idx + 1]);
+      setSelectedSentence(null);
+    }
+  }, [activeBook, activeChapter]);
 
   const {
     isPlaying,
@@ -45,7 +68,27 @@ const Index = () => {
     sentences: allSentences,
     speed,
     voiceEnabled,
+    onChapterEnd: handleChapterEnd,
   });
+
+  // Auto-advance: resume playing after chapter switch
+  useEffect(() => {
+    if (autoAdvanceRef.current && allSentences.length > 0) {
+      autoAdvanceRef.current = false;
+      setTimeout(() => togglePlay(), 100);
+    }
+  }, [allSentences]);
+
+  // Restore sentence position after chapter load
+  useEffect(() => {
+    if (pendingSentenceRef.current !== null && allSentences.length > 0) {
+      const idx = pendingSentenceRef.current;
+      pendingSentenceRef.current = null;
+      if (idx > 0 && idx < allSentences.length) {
+        setTimeout(() => goToSentence(idx), 50);
+      }
+    }
+  }, [allSentences]);
 
   const { save: saveProgress, load: loadProgress } = useReadingProgress(
     activeBook?.id ?? null,
@@ -54,10 +97,11 @@ const Index = () => {
 
   useEffect(() => {
     if (activeBook && activeChapter) {
-      try { saveProgress(activeSentenceIndex); } catch (_) { /* ignore save errors */ }
+      try { saveProgress(activeSentenceIndex); } catch (_) {}
     }
   }, [activeSentenceIndex, activeBook, activeChapter, saveProgress]);
 
+  // Restore reading progress on mount
   useEffect(() => {
     try {
       const progress = loadProgress();
@@ -67,6 +111,9 @@ const Index = () => {
           setActiveBook(book);
           const chapter = book.chapters.find((c) => c.id === progress.chapterId);
           setActiveChapter(chapter ?? book.chapters[0]);
+          if (progress.sentenceIndex > 0) {
+            pendingSentenceRef.current = progress.sentenceIndex;
+          }
         }
       }
     } catch (err) {
@@ -77,6 +124,25 @@ const Index = () => {
   useEffect(() => {
     setNarrationSpeed(speed);
   }, [speed, setNarrationSpeed]);
+
+  const handleFontSizeChange = useCallback((size: FontSize) => {
+    setFontSize(size);
+    try { localStorage.setItem(FONT_SIZE_KEY, size); } catch {}
+  }, []);
+
+  const bookProgress = useMemo(() => {
+    if (!activeBook || !activeChapter) return 0;
+    let total = 0;
+    let current = 0;
+    for (const ch of activeBook.chapters) {
+      const count = ch.scenes.flatMap((s) => s.sentences).length;
+      if (ch.id === activeChapter.id) {
+        current = total + activeSentenceIndex;
+      }
+      total += count;
+    }
+    return total > 0 ? Math.round((current / total) * 100) : 0;
+  }, [activeBook, activeChapter, activeSentenceIndex]);
 
   const handleSelectBook = useCallback((book: Book) => {
     setActiveBook(book);
@@ -89,20 +155,19 @@ const Index = () => {
   const handleSelectChapter = useCallback((chapter: Chapter) => {
     setActiveChapter(chapter);
     setSelectedSentence(null);
-    triggerImprovement("annotations");
-  }, [triggerImprovement]);
+    triggerImprovement("annotations", activeBook ?? undefined);
+  }, [triggerImprovement, activeBook]);
 
   const handleSelectSentence = useCallback((sentence: Sentence) => {
     setSelectedSentence(sentence);
     const idx = allSentences.findIndex((s) => s.id === sentence.id);
     if (idx >= 0) goToSentence(idx);
-    triggerImprovement("annotations");
-  }, [allSentences, goToSentence, triggerImprovement]);
+    triggerImprovement("annotations", activeBook ?? undefined);
+  }, [allSentences, goToSentence, triggerImprovement, activeBook]);
 
   const handleTogglePlay = useCallback(() => {
-    if (!voiceEnabled) setVoiceEnabled(true);
     togglePlay();
-  }, [voiceEnabled, togglePlay]);
+  }, [togglePlay]);
 
   const handleBackToLibrary = useCallback(() => {
     setActiveBook(null);
@@ -111,13 +176,13 @@ const Index = () => {
   }, []);
 
   const handleDeleteBook = useCallback((bookId: string) => {
-    setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    removeBook(bookId);
     if (activeBook?.id === bookId) {
       setActiveBook(null);
       setActiveChapter(null);
       setSelectedSentence(null);
     }
-  }, [activeBook]);
+  }, [activeBook, removeBook]);
 
   const handlePrevChapter = useCallback(() => {
     if (!activeBook || !activeChapter) return;
@@ -141,7 +206,7 @@ const Index = () => {
     setImporting(true);
     try {
       const book = await parseEpub(file);
-      setBooks((prev) => [...prev, book]);
+      addBook(book);
       setActiveBook(book);
       setActiveChapter(book.chapters[0] ?? null);
       setSelectedSentence(null);
@@ -152,7 +217,7 @@ const Index = () => {
     } finally {
       setImporting(false);
     }
-  }, []);
+  }, [addBook]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -211,16 +276,19 @@ const Index = () => {
               activeSentenceIndex={activeSentenceIndex}
               isPlaying={isPlaying}
               voiceEnabled={voiceEnabled}
+              fontSize={fontSize}
               onSelectSentence={handleSelectSentence}
               onBackToLibrary={handleBackToLibrary}
               onPrevChapter={handlePrevChapter}
               onNextChapter={handleNextChapter}
+              onFontSizeChange={handleFontSizeChange}
             />
             <NarrationControls
               isPlaying={isPlaying}
               speed={speed}
               currentSentence={activeSentenceIndex}
               totalSentences={allSentences.length}
+              bookProgress={bookProgress}
               ttsEngine={ttsEngine}
               ttsLoading={ttsLoading}
               voiceEnabled={voiceEnabled}
@@ -276,9 +344,6 @@ const Index = () => {
           </Sheet>
         </>
       )}
-
-      <KeyboardHints />
-      <ThemeToggle />
     </div>
   );
 };

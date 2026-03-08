@@ -1,12 +1,14 @@
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2, Zap } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2, Zap, Keyboard } from "lucide-react";
 import { TTSEngine } from "@/lib/tts-engine";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface NarrationControlsProps {
   isPlaying: boolean;
   speed: number;
   currentSentence: number;
   totalSentences: number;
+  bookProgress: number;
   ttsEngine: TTSEngine;
   ttsLoading: boolean;
   voiceEnabled: boolean;
@@ -22,11 +24,18 @@ interface NarrationControlsProps {
 
 const speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
 
+const shortcuts = [
+  { key: "Space", action: "Play / Pause" },
+  { key: "←", action: "Previous sentence" },
+  { key: "→", action: "Next sentence" },
+];
+
 export function NarrationControls({
   isPlaying,
   speed,
   currentSentence,
   totalSentences,
+  bookProgress,
   ttsEngine,
   ttsLoading,
   voiceEnabled,
@@ -39,21 +48,26 @@ export function NarrationControls({
   onToggleVoice,
   onToggleIntelligence,
 }: NarrationControlsProps) {
-  const progress = totalSentences > 0 ? ((currentSentence + 1) / totalSentences) * 100 : 0;
+  const chapterProgress = totalSentences > 0 ? ((currentSentence + 1) / totalSentences) * 100 : 0;
 
   return (
     <div className="border-t border-border bg-card px-4 sm:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
-      {/* Progress bar */}
-      <div className="w-full h-0.5 bg-muted rounded-full mb-3 overflow-hidden" role="progressbar" aria-valuenow={currentSentence + 1} aria-valuemax={totalSentences}>
-        <div
-          className="h-full bg-primary rounded-full transition-all duration-500"
-          style={{ width: `${progress}%` }}
-        />
+      {/* Progress bars */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex-1 h-0.5 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={currentSentence + 1} aria-valuemax={totalSentences} aria-label="Chapter progress">
+          <div
+            className="h-full bg-primary rounded-full transition-all duration-500"
+            style={{ width: `${chapterProgress}%` }}
+          />
+        </div>
+        <span className="text-[9px] font-mono text-muted-foreground whitespace-nowrap">
+          {bookProgress}%
+        </span>
       </div>
 
       <div className="flex items-center justify-between">
         {/* Left: feature toggles */}
-        <div className="flex items-center gap-1.5 w-24 sm:w-40">
+        <div className="flex items-center gap-1.5 w-24 sm:w-44">
           <button
             onClick={onToggleVoice}
             className={cn(
@@ -84,6 +98,31 @@ export function NarrationControls({
             <Zap className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Intel</span>
           </button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground transition-colors hidden sm:flex"
+                aria-label="Keyboard shortcuts"
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="top" className="w-52 p-3">
+              <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-muted-foreground mb-2">
+                Shortcuts
+              </p>
+              <div className="space-y-1.5">
+                {shortcuts.map((h) => (
+                  <div key={h.key} className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground">{h.action}</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[9px] font-mono text-foreground">
+                      {h.key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Center: playback controls */}
@@ -98,9 +137,9 @@ export function NarrationControls({
             </button>
             <button
               onClick={onTogglePlay}
-              disabled={!voiceEnabled || ttsLoading || ttsEngine === 'none'}
+              disabled={ttsLoading}
               className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30"
-              aria-label={isPlaying ? "Pause narration" : "Play narration"}
+              aria-label={isPlaying ? "Pause" : "Play"}
             >
               {ttsLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -122,7 +161,7 @@ export function NarrationControls({
         </div>
 
         {/* Right: speed + sentence counter */}
-        <div className="flex items-center gap-2 w-24 sm:w-40 justify-end">
+        <div className="flex items-center gap-2 w-24 sm:w-44 justify-end">
           <span className="text-[10px] font-mono text-muted-foreground" aria-label={`Sentence ${currentSentence + 1} of ${totalSentences}`}>
             {currentSentence + 1}/{totalSentences}
           </span>
@@ -132,8 +171,7 @@ export function NarrationControls({
               const nextIdx = (currentIdx + 1) % speeds.length;
               onSpeedChange(speeds[nextIdx]);
             }}
-            disabled={!voiceEnabled}
-            className="text-[11px] font-mono text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border transition-colors disabled:opacity-30"
+            className="text-[11px] font-mono text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border transition-colors"
             aria-label={`Playback speed ${speed}x. Click to change.`}
           >
             {speed}x

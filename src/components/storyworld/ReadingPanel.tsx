@@ -1,7 +1,17 @@
 import { Book, Chapter, Sentence } from "@/data/sampleBooks";
 import { SentenceRenderer } from "./SentenceRenderer";
+import { ThemeToggle } from "./ThemeToggle";
 import { useEffect, useRef, useMemo } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export type FontSize = "small" | "medium" | "large";
+
+const fontSizeConfig: Record<FontSize, string> = {
+  small: "text-[14px] sm:text-[15px] leading-[1.75] tracking-[0.005em]",
+  medium: "text-[16px] sm:text-[17.5px] leading-[1.85] tracking-[0.01em]",
+  large: "text-[18px] sm:text-[20px] leading-[1.9] tracking-[0.01em]",
+};
 
 interface ReadingPanelProps {
   book: Book;
@@ -9,10 +19,12 @@ interface ReadingPanelProps {
   activeSentenceIndex: number;
   isPlaying: boolean;
   voiceEnabled: boolean;
+  fontSize: FontSize;
   onSelectSentence: (sentence: Sentence) => void;
   onBackToLibrary: () => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
+  onFontSizeChange: (size: FontSize) => void;
 }
 
 export function ReadingPanel({
@@ -21,10 +33,12 @@ export function ReadingPanel({
   activeSentenceIndex,
   isPlaying,
   voiceEnabled,
+  fontSize,
   onSelectSentence,
   onBackToLibrary,
   onPrevChapter,
   onNextChapter,
+  onFontSizeChange,
 }: ReadingPanelProps) {
   const activeSentenceRef = useRef<HTMLSpanElement | null>(null);
 
@@ -50,6 +64,13 @@ export function ReadingPanel({
     }
   }, [activeSentenceIndex, isPlaying]);
 
+  const cycleFontSize = (dir: "up" | "down") => {
+    const sizes: FontSize[] = ["small", "medium", "large"];
+    const idx = sizes.indexOf(fontSize);
+    if (dir === "up" && idx < sizes.length - 1) onFontSizeChange(sizes[idx + 1]);
+    if (dir === "down" && idx > 0) onFontSizeChange(sizes[idx - 1]);
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Top navigation bar */}
@@ -74,6 +95,35 @@ export function ReadingPanel({
             {chapter.title}
           </span>
         </div>
+
+        {/* Font size controls */}
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => cycleFontSize("down")}
+            disabled={fontSize === "small"}
+            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+            aria-label="Decrease font size"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-[9px] font-mono text-muted-foreground w-5 text-center">
+            {fontSize === "small" ? "A" : fontSize === "medium" ? "A" : "A"}
+          </span>
+          <button
+            onClick={() => cycleFontSize("up")}
+            disabled={fontSize === "large"}
+            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+            aria-label="Increase font size"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="h-4 w-px bg-border" />
+
+        <ThemeToggle />
+
+        <div className="h-4 w-px bg-border hidden sm:block" />
 
         <div className="flex items-center gap-1">
           <button
@@ -122,7 +172,7 @@ export function ReadingPanel({
                 </p>
               )}
 
-              <div className="text-[16px] sm:text-[17.5px] leading-[1.85] tracking-[0.01em] text-foreground">
+              <div className={cn("text-foreground", fontSizeConfig[fontSize])}>
                 {scene.sentences.map((sentence) => {
                   const idx = sentenceIndexMap.get(sentence.id) ?? 0;
                   const isActive = idx === activeSentenceIndex && isPlaying;

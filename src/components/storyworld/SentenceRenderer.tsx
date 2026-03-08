@@ -38,9 +38,6 @@ export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProp
     return (
       <span
         ref={ref}
-        role="button"
-        tabIndex={0}
-        aria-label={`${sentence.type}${sentence.speaker ? ` by ${sentence.speaker}` : ''}: ${sentence.text.substring(0, 50)}...`}
         aria-current={isActive ? "true" : undefined}
         className={cn(
           "cursor-pointer transition-all duration-400 rounded-sm px-0.5 -mx-0.5 inline",
@@ -51,12 +48,6 @@ export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProp
           sentence.type === "dialogue" && "italic"
         )}
         onClick={() => onSelect(sentence)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSelect(sentence);
-          }
-        }}
       >
         {sentence.text}{" "}
       </span>
