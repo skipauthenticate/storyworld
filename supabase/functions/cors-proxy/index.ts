@@ -17,6 +17,7 @@ const CDN_HOSTS = [
   'github-releases.githubusercontent.com',
   'github-cloud.githubusercontent.com',
   'github-cloud.s3.amazonaws.com',
+  'release-assets.githubusercontent.com',
 ];
 
 // Simple in-memory rate limiter: max 30 requests per minute per IP
