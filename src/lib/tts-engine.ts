@@ -23,15 +23,9 @@ let ttsState: TTSState = {
 
 let initPromise: Promise<TTSEngine> | null = null;
 
-const VOICE_MODEL_BASE = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main';
-const VOICE_ID = 'piper-en-lessac';
-const MODEL_DIR = '/models/piper-en-lessac';
-
-async function fetchBinary(url: string): Promise<Uint8Array> {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Failed to fetch ${url}: ${resp.status}`);
-  return new Uint8Array(await resp.arrayBuffer());
-}
+// RunAnywhere's pre-packaged tar.gz that includes model + tokens + espeak-ng-data
+const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz';
+const TTS_MODEL_ID = 'vits-piper-en_US-lessac-medium';
 
 /**
  * Initialize TTS engine. Tries RunAnywhere first, falls back to Web Speech API.
@@ -43,7 +37,7 @@ export async function initTTS(): Promise<TTSEngine> {
     ttsState.loading = true;
 
     try {
-      const { RunAnywhere, SDKEnvironment } = await import('@runanywhere/web');
+      const { RunAnywhere, SDKEnvironment, ModelManager, ModelCategory, ModelStatus } = await import('@runanywhere/web');
       const { ONNX, TTS, SherpaONNXBridge } = await import('@runanywhere/web-onnx');
 
       // Set WASM location (copied by vite-plugin-static-copy)
@@ -56,35 +50,50 @@ export async function initTTS(): Promise<TTSEngine> {
         await ONNX.register();
       }
 
-      // Ensure WASM module is loaded
-      const sherpa = SherpaONNXBridge.shared;
-      await sherpa.ensureLoaded();
-      console.log('[STORYWORLD] Sherpa-ONNX WASM loaded');
+      // Register TTS model as a tar.gz archive (includes onnx + tokens + espeak-ng-data)
+      ModelManager.registerModels([{
+        id: TTS_MODEL_ID,
+        name: 'Piper TTS EN-US Lessac Medium',
+        url: TTS_ARCHIVE_URL,
+        modality: ModelCategory.SpeechSynthesis,
+        isArchive: true,
+      } as any]);
 
-      // Download model files and write them to the WASM virtual filesystem
-      console.log('[STORYWORLD] Downloading Piper TTS model files...');
-      const [modelData, tokensData] = await Promise.all([
-        fetchBinary(`${VOICE_MODEL_BASE}/en_US-lessac-medium.onnx`),
-        fetchBinary(`${VOICE_MODEL_BASE}/tokens.txt`),
-      ]);
-      console.log(`[STORYWORLD] Model: ${(modelData.byteLength / 1e6).toFixed(1)}MB, Tokens: ${(tokensData.byteLength / 1e3).toFixed(1)}KB`);
+      // Check current status
+      const models = ModelManager.getModels();
+      const model = models.find((m: any) => m.id === TTS_MODEL_ID);
+      console.log(`[STORYWORLD] TTS model status: ${model?.status}`);
 
-      // Write files to sherpa-onnx virtual FS
-      sherpa.writeFile(`${MODEL_DIR}/model.onnx`, modelData);
-      sherpa.writeFile(`${MODEL_DIR}/tokens.txt`, tokensData);
-      console.log('[STORYWORLD] Model files written to WASM FS');
+      // Download if not already downloaded
+      if (!model || model.status === ModelStatus.Registered) {
+        console.log('[STORYWORLD] Downloading Piper TTS archive (~65MB with espeak-ng-data)...');
+        await ModelManager.downloadModel(TTS_MODEL_ID);
+        console.log('[STORYWORLD] TTS archive downloaded');
+      } else if (model.status === ModelStatus.Loaded) {
+        // Already loaded from a previous session
+        ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
+        console.log('[STORYWORLD] ✓ Piper TTS already loaded');
+        return 'runanywhere' as TTSEngine;
+      } else {
+        console.log('[STORYWORLD] TTS model already downloaded');
+      }
 
-      // Load the voice via TTS extension
-      await TTS.loadVoice({
-        voiceId: VOICE_ID,
-        modelPath: `${MODEL_DIR}/model.onnx`,
-        tokensPath: `${MODEL_DIR}/tokens.txt`,
-        dataDir: '',
-        numThreads: 1,
-      });
+      // Load the model (extracts tar.gz, writes to WASM FS, calls TTS.loadVoice)
+      console.log('[STORYWORLD] Loading TTS model (extracting archive → WASM FS)...');
+      const loaded = await ModelManager.loadModel(TTS_MODEL_ID, { coexist: true });
+      
+      if (!loaded) {
+        // Try force: re-download and load
+        console.warn('[STORYWORLD] loadModel returned false, retrying with fresh download...');
+        await ModelManager.downloadModel(TTS_MODEL_ID);
+        const retryLoaded = await ModelManager.loadModel(TTS_MODEL_ID, { coexist: true });
+        if (!retryLoaded) {
+          throw new Error('ModelManager.loadModel failed after retry');
+        }
+      }
 
       ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
-      console.log('[STORYWORLD] ✓ RunAnywhere Piper TTS ready');
+      console.log('[STORYWORLD] ✓ RunAnywhere Piper TTS ready (neural voice)');
       return 'runanywhere' as TTSEngine;
     } catch (err) {
       console.warn('[STORYWORLD] RunAnywhere TTS unavailable, falling back:', err);
