@@ -1,10 +1,9 @@
 import { Sentence, Book } from "@/data/sampleBooks";
-import { X, BookOpen, MessageSquare, Sparkles, User, Send, Loader2, Download, Brain, FlaskConical } from "lucide-react";
+import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Brain, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 import { useLLMChat } from "@/hooks/useLLMChat";
-import { ResearchPanel } from "./ResearchPanel";
 
 interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
@@ -19,13 +18,7 @@ export function IntelligencePanel({
   onClose,
   className,
 }: IntelligencePanelProps) {
-  const [activeTab, setActiveTab] = useState<"context" | "chat" | "research">("context");
-
-  const tabs = [
-    { id: "context" as const, label: "Context", icon: BookOpen },
-    { id: "chat" as const, label: "Chat", icon: Brain },
-    { id: "research" as const, label: "Research", icon: FlaskConical },
-  ];
+  const [chatExpanded, setChatExpanded] = useState(false);
 
   return (
     <aside className={cn("w-[340px] min-w-[340px] h-full flex flex-col border-l border-border bg-card overflow-hidden", className)} role="complementary" aria-label="Intelligence panel">
@@ -39,57 +32,25 @@ export function IntelligencePanel({
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border" role="tablist">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 py-3 text-[11px] font-mono transition-colors border-b-2",
-              activeTab === tab.id
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <tab.icon className="w-3.5 h-3.5" />
-            {tab.label}
-          </button>
-        ))}
+      {/* Context content — scrollable, shrinks when chat is expanded */}
+      <div className={cn("overflow-y-auto transition-all", chatExpanded ? "flex-shrink-0 max-h-[35%]" : "flex-1")}>
+        <ContextContent selectedSentence={selectedSentence} book={book} />
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto" role="tabpanel">
-        <AnimatePresence mode="wait">
-          {activeTab === "context" && (
-            <ContextTab key="context" selectedSentence={selectedSentence} book={book} />
-          )}
-          {activeTab === "chat" && (
-            <ChatTab key="chat" book={book} selectedSentence={selectedSentence} />
-          )}
-          {activeTab === "research" && (
-            <ResearchPanel key="research" />
-          )}
-        </AnimatePresence>
-      </div>
+      {/* Persistent chat area */}
+      <PersistentChat
+        book={book}
+        selectedSentence={selectedSentence}
+        expanded={chatExpanded}
+        onToggleExpand={() => setChatExpanded(v => !v)}
+      />
     </aside>
   );
 }
 
-/**
- * Merged Context tab: Annotation + Characters + Themes in a single scrollable view
- */
-function ContextTab({ selectedSentence, book }: { selectedSentence: Sentence | null; book: Book }) {
+function ContextContent({ selectedSentence, book }: { selectedSentence: Sentence | null; book: Book }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2 }}
-      className="p-4 space-y-6"
-    >
+    <div className="p-4 space-y-6">
       {/* Annotation section */}
       {selectedSentence ? (
         <div className="space-y-4">
@@ -137,10 +98,9 @@ function ContextTab({ selectedSentence, book }: { selectedSentence: Sentence | n
         </div>
       )}
 
-      {/* Divider */}
       <div className="h-px bg-border" />
 
-      {/* Characters section */}
+      {/* Characters */}
       {book.characters.length > 0 && (
         <div>
           <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground mb-3 flex items-center gap-1.5">
@@ -149,28 +109,19 @@ function ContextTab({ selectedSentence, book }: { selectedSentence: Sentence | n
           </p>
           <div className="space-y-2">
             {book.characters.map((char) => (
-              <div
-                key={char.id}
-                className="p-2.5 rounded border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
-              >
+              <div key={char.id} className="p-2.5 rounded border border-border bg-muted/30 hover:bg-muted/50 transition-colors">
                 <div className="flex items-center gap-2 mb-1">
-                  <div
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: char.color }}
-                    aria-hidden="true"
-                  />
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: char.color }} aria-hidden="true" />
                   <span className="text-[13px] font-semibold">{char.name}</span>
                 </div>
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  {char.description}
-                </p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">{char.description}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Themes section */}
+      {/* Themes */}
       {book.themes.length > 0 && (
         <div>
           <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground mb-3 flex items-center gap-1.5">
@@ -179,10 +130,7 @@ function ContextTab({ selectedSentence, book }: { selectedSentence: Sentence | n
           </p>
           <div className="space-y-1.5">
             {book.themes.map((theme, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2.5 p-2 rounded border border-border bg-muted/20 hover:bg-muted/40 transition-colors"
-              >
+              <div key={i} className="flex items-center gap-2.5 p-2 rounded border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" aria-hidden="true" />
                 <span className="text-[12px]">{theme}</span>
               </div>
@@ -190,11 +138,24 @@ function ContextTab({ selectedSentence, book }: { selectedSentence: Sentence | n
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
-function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sentence | null }) {
+/**
+ * Persistent chat — always pinned at bottom. Collapsed: just input bar. Expanded: messages + input.
+ */
+function PersistentChat({
+  book,
+  selectedSentence,
+  expanded,
+  onToggleExpand,
+}: {
+  book: Book;
+  selectedSentence: Sentence | null;
+  expanded: boolean;
+  onToggleExpand: () => void;
+}) {
   const {
     messages,
     isGenerating,
@@ -208,7 +169,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
 
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -220,8 +180,13 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
 
   const handleSend = () => {
     if (!input.trim() || isGenerating) return;
+    if (engineStatus !== 'ready') {
+      initEngine();
+      return;
+    }
     sendMessage(input, systemPrompt);
     setInput("");
+    if (!expanded) onToggleExpand();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -232,131 +197,100 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
     }
   };
 
-  if (engineStatus === 'idle' || engineStatus === 'error') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.2 }}
-        className="flex flex-col items-center justify-center h-full p-6 text-center"
-      >
-        <Brain className="w-10 h-10 text-primary/40 mb-4" />
-        <p className="text-sm font-medium text-foreground mb-1">On-Device AI Chat</p>
-        <p className="text-[11px] text-muted-foreground mb-4 leading-relaxed">
-          Chat with Qwen2.5-0.5B running entirely in your browser via RunAnywhere. No data leaves your device.
-        </p>
-        {engineStatus === 'error' && (
-          <p className="text-[11px] text-destructive mb-3">
-            Failed to initialize. Click below to retry.
-          </p>
-        )}
-        <button
-          onClick={initEngine}
-          className="px-4 py-2 rounded bg-primary text-primary-foreground text-[12px] font-mono hover:bg-primary/90 transition-colors flex items-center gap-2"
-        >
-          <Download className="w-3.5 h-3.5" />
-          Download Model (~350MB)
-        </button>
-        <p className="text-[10px] text-muted-foreground/50 mt-3">
-          One-time download, cached locally
-        </p>
-      </motion.div>
-    );
-  }
-
-  if (engineStatus === 'downloading' || engineStatus === 'loading') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.2 }}
-        className="flex flex-col items-center justify-center h-full p-6 text-center"
-      >
-        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
-        <p className="text-sm font-medium text-foreground mb-2">
-          {engineStatus === 'downloading' ? 'Downloading Model...' : 'Loading into WASM...'}
-        </p>
-        {engineStatus === 'downloading' && (
-          <>
-            <div className="w-full max-w-[200px] h-1.5 rounded-full bg-muted overflow-hidden mb-2">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-300"
-                style={{ width: `${downloadProgress}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-muted-foreground font-mono">{downloadProgress}%</p>
-          </>
-        )}
-      </motion.div>
-    );
-  }
+  const isLoading = engineStatus === 'downloading' || engineStatus === 'loading';
+  const needsInit = engineStatus === 'idle' || engineStatus === 'error';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2 }}
-      className="flex flex-col h-full"
-    >
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
-        {messages.length === 0 && (
-          <div className="text-center py-8">
-            <Brain className="w-6 h-6 text-primary/30 mx-auto mb-2" />
-            <p className="text-[11px] text-muted-foreground">
-              Ask about the book, characters, themes, or any selected passage.
-            </p>
-            <p className="text-[10px] text-muted-foreground/50 mt-1">
-              Powered by Qwen2.5 · RunAnywhere · 100% on-device
-            </p>
-          </div>
-        )}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={cn(
-              "flex",
-              msg.role === 'user' ? "justify-end" : "justify-start"
-            )}
-          >
-            <div
-              className={cn(
-                "max-w-[85%] rounded-lg px-3 py-2 text-[13px] leading-relaxed",
-                msg.role === 'user'
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted/60 text-foreground border border-border"
-              )}
-            >
-              {msg.content}
-              {isGenerating && i === messages.length - 1 && msg.role === 'assistant' && (
-                <span className="inline-block w-1.5 h-3.5 bg-primary/60 ml-0.5 animate-pulse" />
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className={cn("border-t border-border bg-card flex flex-col", expanded && "flex-1 min-h-0")}>
+      {/* Expand/collapse header */}
+      <button
+        onClick={onToggleExpand}
+        className="flex items-center justify-between px-4 py-2 hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Brain className="w-3 h-3 text-primary" />
+          <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground">
+            AI Chat
+          </span>
+          {messages.length > 0 && (
+            <span className="text-[9px] font-mono text-primary/60">{messages.length} msgs</span>
+          )}
+          {isLoading && (
+            <span className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground">
+              <Loader2 className="w-2.5 h-2.5 animate-spin" />
+              {engineStatus === 'downloading' ? `${downloadProgress}%` : 'Loading...'}
+            </span>
+          )}
+        </div>
+        <ChevronUp className={cn("w-3 h-3 text-muted-foreground transition-transform", !expanded && "rotate-180")} />
+      </button>
 
-      <div className="p-3 border-t border-border">
-        {messages.length > 0 && (
-          <button
-            onClick={clearMessages}
-            className="text-[10px] text-muted-foreground hover:text-foreground mb-2 font-mono"
+      {/* Expanded chat messages */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="flex-1 min-h-0 flex flex-col overflow-hidden"
           >
-            Clear chat
-          </button>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2.5">
+              {needsInit && messages.length === 0 && (
+                <div className="text-center py-4">
+                  <Brain className="w-6 h-6 text-primary/30 mx-auto mb-2" />
+                  <p className="text-[11px] text-muted-foreground mb-2">
+                    On-device AI · No data leaves your browser
+                  </p>
+                  <button
+                    onClick={initEngine}
+                    className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-[11px] font-mono hover:bg-primary/90 transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download Model (~350MB)
+                  </button>
+                  <p className="text-[9px] text-muted-foreground/50 mt-2">One-time download, cached locally</p>
+                </div>
+              )}
+              {messages.map((msg, i) => (
+                <div key={i} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start")}>
+                  <div className={cn(
+                    "max-w-[85%] rounded-lg px-3 py-2 text-[12px] leading-relaxed",
+                    msg.role === 'user'
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/60 text-foreground border border-border"
+                  )}>
+                    {msg.content}
+                    {isGenerating && i === messages.length - 1 && msg.role === 'assistant' && (
+                      <span className="inline-block w-1.5 h-3 bg-primary/60 ml-0.5 animate-pulse" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {messages.length > 0 && (
+              <div className="px-3 pb-1">
+                <button onClick={clearMessages} className="text-[9px] text-muted-foreground hover:text-foreground font-mono">
+                  Clear chat
+                </button>
+              </div>
+            )}
+          </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* Always-visible input */}
+      <div className="px-3 pb-3 pt-1">
         <div className="flex items-center gap-2 px-3 py-2 rounded bg-muted/50 border border-border">
           <input
-            ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about this book..."
+            onFocus={() => { if (!expanded && messages.length > 0) onToggleExpand(); }}
+            placeholder={needsInit ? "Type to start AI chat..." : "Ask about this book..."}
             className="flex-1 bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground/50 outline-none"
-            disabled={isGenerating}
+            disabled={isGenerating || isLoading}
           />
           {isGenerating ? (
             <button onClick={cancel} className="text-destructive hover:text-destructive/80" aria-label="Cancel generation">
@@ -365,7 +299,7 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
           ) : (
             <button
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isLoading}
               className="text-primary hover:text-primary/80 disabled:text-muted-foreground/30"
               aria-label="Send message"
             >
@@ -374,6 +308,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
