@@ -24,6 +24,7 @@ function SidebarContent({
   onSelectBook,
   onSelectChapter,
   onImportEpub,
+  onDeleteBook,
   importing,
   onItemClick,
 }: LibrarySidebarProps & { onItemClick?: () => void }) {
