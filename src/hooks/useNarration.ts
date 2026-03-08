@@ -79,8 +79,10 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
     });
   }, [speed]);
 
+  const voiceEnabledRef = useRef(voiceEnabled);
+  useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
+
   const togglePlay = useCallback(() => {
-    if (!voiceEnabled) return;
     if (isPlaying) {
       setIsPlaying(false);
       playingRef.current = false;
@@ -90,7 +92,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
       playingRef.current = true;
       speakCurrent(indexRef.current);
     }
-  }, [isPlaying, voiceEnabled, speakCurrent]);
+  }, [isPlaying, speakCurrent]);
 
   const goToNext = useCallback(() => {
     stopSpeaking();

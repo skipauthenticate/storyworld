@@ -11,7 +11,7 @@ import { useReadingProgress } from "@/hooks/useReadingProgress";
 import { useAutoResearch } from "@/hooks/useAutoResearch";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Brain } from "lucide-react";
+import { Zap } from "lucide-react";
 import { ThemeToggle } from "@/components/storyworld/ThemeToggle";
 
 const Index = () => {
@@ -183,7 +183,7 @@ const Index = () => {
               className="fixed bottom-20 right-3 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg"
               aria-label="Open intelligence panel"
             >
-              <Brain className="w-4 h-4" />
+              <Zap className="w-4 h-4" />
             </button>
           )}
           <Sheet open={intelligenceEnabled} onOpenChange={setIntelligenceEnabled}>

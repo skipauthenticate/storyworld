@@ -1,4 +1,4 @@
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2, Brain } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2, Zap } from "lucide-react";
 import { TTSEngine } from "@/lib/tts-engine";
 import { cn } from "@/lib/utils";
 
@@ -79,7 +79,7 @@ export function NarrationControls({
             aria-label={intelligenceEnabled ? "Hide intelligence panel" : "Show intelligence panel"}
             aria-pressed={intelligenceEnabled}
           >
-            <Brain className="w-3.5 h-3.5" />
+            <Zap className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Intel</span>
           </button>
         </div>
