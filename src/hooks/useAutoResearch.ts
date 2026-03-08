@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { sampleBooks } from "@/data/sampleBooks";
+import { Book } from "@/data/sampleBooks";
 
 export interface Experiment {
   id: string;
@@ -19,7 +19,7 @@ export interface Experiment {
   created_at: string;
 }
 
-const DEBOUNCE_MS = 60_000; // 60 seconds between auto-triggers
+const DEBOUNCE_MS = 60_000;
 
 export function useAutoResearch() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
@@ -41,33 +41,30 @@ export function useAutoResearch() {
       }
       setExperiments((data as unknown as Experiment[]) || []);
     } catch (networkErr) {
-      console.error("[AutoResearch] Network error fetching experiments:", networkErr);
-      // Don't throw — just leave experiments as-is
+      console.error("[AutoResearch] Network error:", networkErr);
     }
   }, []);
 
-  const runExperiment = useCallback(async (domain?: string) => {
+  const runExperiment = useCallback(async (domain?: string, book?: Book) => {
     if (isRunning) return;
+    if (!book || book.characters.length === 0) {
+      console.warn("[AutoResearch] Book has no enrichment data, skipping");
+      return;
+    }
     setIsRunning(true);
     setError(null);
 
     try {
-      const gatsby = sampleBooks.find((b) => b.id === "gatsby");
-      if (!gatsby) {
-        console.warn("[AutoResearch] No book data available, skipping");
-        return;
-      }
-
       const bookData = {
-        title: gatsby.title,
-        author: gatsby.author,
-        themes: gatsby.themes,
-        characters: gatsby.characters.map((c) => ({
+        title: book.title,
+        author: book.author,
+        themes: book.themes,
+        characters: book.characters.map((c) => ({
           id: c.id,
           name: c.name,
           description: c.description,
         })),
-        sentences: gatsby.chapters.flatMap((ch) =>
+        sentences: book.chapters.flatMap((ch) =>
           ch.scenes.flatMap((sc) =>
             sc.sentences.map((s) => ({
               id: s.id,
@@ -88,11 +85,7 @@ export function useAutoResearch() {
       }));
 
       const { data, error: fnErr } = await supabase.functions.invoke("autoresearch", {
-        body: {
-          domain,
-          bookData,
-          experimentHistory: recentExperiments,
-        },
+        body: { domain, bookData, experimentHistory: recentExperiments },
       });
 
       if (fnErr) throw new Error(fnErr.message || "Edge function error");
@@ -110,14 +103,14 @@ export function useAutoResearch() {
     }
   }, [isRunning, experiments]);
 
-  // Debounced trigger for background auto-improvement — NEVER throws
-  const triggerImprovement = useCallback((domain?: string) => {
+  const triggerImprovement = useCallback((domain?: string, book?: Book) => {
     try {
       const now = Date.now();
       if (now - lastTriggerRef.current < DEBOUNCE_MS) return;
       if (isRunning) return;
+      if (!book || book.characters.length === 0) return;
       lastTriggerRef.current = now;
-      runExperiment(domain).catch((err) => {
+      runExperiment(domain, book).catch((err) => {
         console.warn("[AutoResearch] Background trigger failed:", err);
       });
     } catch (err) {
@@ -125,10 +118,10 @@ export function useAutoResearch() {
     }
   }, [isRunning, runExperiment]);
 
-  const runLoop = useCallback(async (count: number = 3, domain?: string) => {
+  const runLoop = useCallback(async (count: number = 3, domain?: string, book?: Book) => {
     for (let i = 0; i < count; i++) {
       try {
-        await runExperiment(domain);
+        await runExperiment(domain, book);
       } catch (err) {
         console.warn(`[AutoResearch] Loop iteration ${i} failed:`, err);
       }

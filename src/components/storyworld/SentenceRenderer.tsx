@@ -48,12 +48,6 @@ export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProp
           sentence.type === "dialogue" && "italic"
         )}
         onClick={() => onSelect(sentence)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSelect(sentence);
-          }
-        }}
       >
         {sentence.text}{" "}
       </span>

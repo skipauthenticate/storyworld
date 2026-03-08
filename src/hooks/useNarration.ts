@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { initTTS, speakSentence, stopSpeaking, getTTSState, type TTSEngine } from '@/lib/tts-engine';
+import { initTTS, speakSentence, stopSpeaking, type TTSEngine } from '@/lib/tts-engine';
 import { Sentence } from '@/data/sampleBooks';
 
 interface UseNarrationOptions {
   sentences: Sentence[];
   speed: number;
   voiceEnabled: boolean;
+  onChapterEnd?: () => void;
 }
 
 interface UseNarrationReturn {
@@ -21,19 +22,40 @@ interface UseNarrationReturn {
   reset: () => void;
 }
 
-export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: UseNarrationOptions): UseNarrationReturn {
+function estimateReadingMs(text: string, speed: number): number {
+  const words = text.split(/\s+/).length;
+  const wpm = 250 * speed;
+  return Math.max(800, (words / wpm) * 60000);
+}
+
+export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onChapterEnd }: UseNarrationOptions): UseNarrationReturn {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(0);
   const [ttsEngine, setTtsEngine] = useState<TTSEngine>('none');
   const [ttsLoading, setTtsLoading] = useState(false);
   const [speed, setSpeed] = useState(initialSpeed);
+
   const playingRef = useRef(false);
   const indexRef = useRef(0);
   const sentencesRef = useRef(sentences);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  const ttsEngineRef = useRef(ttsEngine);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onChapterEndRef = useRef(onChapterEnd);
 
   useEffect(() => { playingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { indexRef.current = activeSentenceIndex; }, [activeSentenceIndex]);
   useEffect(() => { sentencesRef.current = sentences; }, [sentences]);
+  useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
+  useEffect(() => { ttsEngineRef.current = ttsEngine; }, [ttsEngine]);
+  useEffect(() => { onChapterEndRef.current = onChapterEnd; }, [onChapterEnd]);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
 
   // Reset when sentences array identity changes (chapter switch)
   const prevSentencesRef = useRef(sentences);
@@ -41,127 +63,126 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
     if (sentences !== prevSentencesRef.current) {
       prevSentencesRef.current = sentences;
       try { stopSpeaking(); } catch (_) {}
+      clearTimer();
       setIsPlaying(false);
       playingRef.current = false;
       setActiveSentenceIndex(0);
       indexRef.current = 0;
     }
-  }, [sentences]);
+  }, [sentences, clearTimer]);
 
-  // Initialize TTS — wrapped in try/catch
+  // Initialize TTS
   useEffect(() => {
     setTtsLoading(true);
     initTTS()
-      .then((engine) => {
-        setTtsEngine(engine);
-      })
+      .then((engine) => setTtsEngine(engine))
       .catch((err) => {
-        console.warn('[Narration] TTS init failed, continuing without voice:', err);
+        console.warn('[Narration] TTS init failed:', err);
         setTtsEngine('none');
       })
-      .finally(() => {
-        setTtsLoading(false);
-      });
+      .finally(() => setTtsLoading(false));
   }, []);
 
   const speakCurrent = useCallback(async (idx: number) => {
-    if (idx >= sentencesRef.current.length || !playingRef.current) return;
+    if (idx >= sentencesRef.current.length || !playingRef.current) {
+      if (idx >= sentencesRef.current.length) {
+        setIsPlaying(false);
+        playingRef.current = false;
+        onChapterEndRef.current?.();
+      }
+      return;
+    }
+
     const sentence = sentencesRef.current[idx];
-    try {
-      await speakSentence(sentence.text, {
-        speed,
-        onEnd: () => {
-          if (!playingRef.current) return;
-          const nextIdx = idx + 1;
-          if (nextIdx < sentencesRef.current.length) {
-            setActiveSentenceIndex(nextIdx);
-            indexRef.current = nextIdx;
-            setTimeout(() => {
-              if (playingRef.current) speakCurrent(nextIdx);
-            }, 200);
-          } else {
-            setIsPlaying(false);
-            playingRef.current = false;
-          }
-        },
-      });
-    } catch (err) {
-      console.warn('[Narration] speakCurrent failed at index', idx, err);
-      // Advance to next sentence despite error so narration doesn't stall
-      if (playingRef.current) {
-        const nextIdx = idx + 1;
-        if (nextIdx < sentencesRef.current.length) {
-          setActiveSentenceIndex(nextIdx);
-          indexRef.current = nextIdx;
-          setTimeout(() => {
-            if (playingRef.current) speakCurrent(nextIdx);
-          }, 500);
-        } else {
-          setIsPlaying(false);
-          playingRef.current = false;
+
+    const advance = () => {
+      if (!playingRef.current) return;
+      const nextIdx = idx + 1;
+      if (nextIdx < sentencesRef.current.length) {
+        setActiveSentenceIndex(nextIdx);
+        indexRef.current = nextIdx;
+        setTimeout(() => {
+          if (playingRef.current) speakCurrent(nextIdx);
+        }, 200);
+      } else {
+        setIsPlaying(false);
+        playingRef.current = false;
+        onChapterEndRef.current?.();
+      }
+    };
+
+    // Use TTS if voice is enabled and available, otherwise timer-based
+    if (voiceEnabledRef.current && ttsEngineRef.current !== 'none') {
+      try {
+        await speakSentence(sentence.text, { speed, onEnd: advance });
+      } catch (err) {
+        console.warn('[Narration] TTS error at index', idx, err);
+        if (playingRef.current) {
+          setTimeout(advance, 500);
         }
       }
+    } else {
+      // Timer-based sentence advance
+      const ms = estimateReadingMs(sentence.text, speed);
+      timerRef.current = setTimeout(advance, ms);
     }
   }, [speed]);
-
-  const voiceEnabledRef = useRef(voiceEnabled);
-  useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
 
   const togglePlay = useCallback(() => {
     if (isPlaying) {
       setIsPlaying(false);
       playingRef.current = false;
       try { stopSpeaking(); } catch (_) {}
+      clearTimer();
     } else {
       setIsPlaying(true);
       playingRef.current = true;
       speakCurrent(indexRef.current);
     }
-  }, [isPlaying, speakCurrent]);
+  }, [isPlaying, speakCurrent, clearTimer]);
 
   const goToNext = useCallback(() => {
     try { stopSpeaking(); } catch (_) {}
+    clearTimer();
     const next = Math.min(sentencesRef.current.length - 1, activeSentenceIndex + 1);
     setActiveSentenceIndex(next);
     indexRef.current = next;
     if (playingRef.current) speakCurrent(next);
-  }, [activeSentenceIndex, speakCurrent]);
+  }, [activeSentenceIndex, speakCurrent, clearTimer]);
 
   const goToPrevious = useCallback(() => {
     try { stopSpeaking(); } catch (_) {}
+    clearTimer();
     const prev = Math.max(0, activeSentenceIndex - 1);
     setActiveSentenceIndex(prev);
     indexRef.current = prev;
     if (playingRef.current) speakCurrent(prev);
-  }, [activeSentenceIndex, speakCurrent]);
+  }, [activeSentenceIndex, speakCurrent, clearTimer]);
 
   const goToSentence = useCallback((index: number) => {
     try { stopSpeaking(); } catch (_) {}
+    clearTimer();
     setActiveSentenceIndex(index);
     indexRef.current = index;
     if (playingRef.current) speakCurrent(index);
-  }, [speakCurrent]);
+  }, [speakCurrent, clearTimer]);
 
   const reset = useCallback(() => {
     try { stopSpeaking(); } catch (_) {}
+    clearTimer();
     setIsPlaying(false);
     playingRef.current = false;
     setActiveSentenceIndex(0);
     indexRef.current = 0;
-  }, []);
+  }, [clearTimer]);
 
-  // Stop when voice is disabled
   useEffect(() => {
-    if (!voiceEnabled && isPlaying) {
-      setIsPlaying(false);
-      playingRef.current = false;
+    return () => {
       try { stopSpeaking(); } catch (_) {}
-    }
-  }, [voiceEnabled, isPlaying]);
-
-  useEffect(() => {
-    return () => { try { stopSpeaking(); } catch (_) {} playingRef.current = false; };
-  }, []);
+      clearTimer();
+      playingRef.current = false;
+    };
+  }, [clearTimer]);
 
   return {
     isPlaying,
