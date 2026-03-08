@@ -74,7 +74,7 @@ function SidebarContent({
         </div>
         <div className="space-y-1">
           {books.map((book) => (
-            <div key={book.id}>
+            <div key={book.id} className="group">
               <button
                 onClick={() => {
                   onSelectBook(book);

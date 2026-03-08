@@ -198,6 +198,7 @@ const Index = () => {
         onSelectBook={handleSelectBook}
         onSelectChapter={handleSelectChapter}
         onImportEpub={handleImportEpub}
+        onDeleteBook={handleDeleteBook}
         importing={importing}
       />
 
