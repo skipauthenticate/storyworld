@@ -11,6 +11,7 @@ const ALLOWED_HOSTS = [
   'cdn-lfs.huggingface.co',
   'cdn-lfs-us-1.huggingface.co',
   'cdn-lfs.hf.co',
+  'hf.co',
 ];
 
 const CDN_HOSTS = [
@@ -18,6 +19,8 @@ const CDN_HOSTS = [
   'github-cloud.githubusercontent.com',
   'github-cloud.s3.amazonaws.com',
   'release-assets.githubusercontent.com',
+  'cas-bridge.xethub.hf.co',
+  'xethub.hf.co',
 ];
 
 // Simple in-memory rate limiter: max 30 requests per minute per IP
@@ -47,7 +50,7 @@ function isAllowedUrl(urlString: string): boolean {
     if (url.protocol !== 'https:') return false;
     const hostname = url.hostname.toLowerCase();
     if (hostname === 'localhost' || hostname.startsWith('127.') || hostname.startsWith('10.') || hostname.startsWith('192.168.')) return false;
-    return ALLOWED_HOSTS.some(h => hostname === h || hostname.endsWith('.' + h));
+    return isAllowedHost(hostname);
   } catch {
     return false;
   }

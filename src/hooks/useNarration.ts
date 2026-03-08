@@ -40,7 +40,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
   useEffect(() => {
     if (sentences !== prevSentencesRef.current) {
       prevSentencesRef.current = sentences;
-      stopSpeaking();
+      try { stopSpeaking(); } catch (_) {}
       setIsPlaying(false);
       playingRef.current = false;
       setActiveSentenceIndex(0);
@@ -48,35 +48,60 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
     }
   }, [sentences]);
 
-  // Initialize TTS
+  // Initialize TTS — wrapped in try/catch
   useEffect(() => {
     setTtsLoading(true);
-    initTTS().then((engine) => {
-      setTtsEngine(engine);
-      setTtsLoading(false);
-    });
+    initTTS()
+      .then((engine) => {
+        setTtsEngine(engine);
+      })
+      .catch((err) => {
+        console.warn('[Narration] TTS init failed, continuing without voice:', err);
+        setTtsEngine('none');
+      })
+      .finally(() => {
+        setTtsLoading(false);
+      });
   }, []);
 
   const speakCurrent = useCallback(async (idx: number) => {
     if (idx >= sentencesRef.current.length || !playingRef.current) return;
     const sentence = sentencesRef.current[idx];
-    await speakSentence(sentence.text, {
-      speed,
-      onEnd: () => {
-        if (!playingRef.current) return;
+    try {
+      await speakSentence(sentence.text, {
+        speed,
+        onEnd: () => {
+          if (!playingRef.current) return;
+          const nextIdx = idx + 1;
+          if (nextIdx < sentencesRef.current.length) {
+            setActiveSentenceIndex(nextIdx);
+            indexRef.current = nextIdx;
+            setTimeout(() => {
+              if (playingRef.current) speakCurrent(nextIdx);
+            }, 200);
+          } else {
+            setIsPlaying(false);
+            playingRef.current = false;
+          }
+        },
+      });
+    } catch (err) {
+      console.warn('[Narration] speakCurrent failed at index', idx, err);
+      // Advance to next sentence despite error so narration doesn't stall
+      if (playingRef.current) {
         const nextIdx = idx + 1;
         if (nextIdx < sentencesRef.current.length) {
           setActiveSentenceIndex(nextIdx);
           indexRef.current = nextIdx;
           setTimeout(() => {
             if (playingRef.current) speakCurrent(nextIdx);
-          }, 200);
+          }, 500);
         } else {
           setIsPlaying(false);
           playingRef.current = false;
         }
-      },
-    });
+      }
+    }
   }, [speed]);
 
   const voiceEnabledRef = useRef(voiceEnabled);
@@ -86,7 +111,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
     if (isPlaying) {
       setIsPlaying(false);
       playingRef.current = false;
-      stopSpeaking();
+      try { stopSpeaking(); } catch (_) {}
     } else {
       setIsPlaying(true);
       playingRef.current = true;
@@ -95,7 +120,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
   }, [isPlaying, speakCurrent]);
 
   const goToNext = useCallback(() => {
-    stopSpeaking();
+    try { stopSpeaking(); } catch (_) {}
     const next = Math.min(sentencesRef.current.length - 1, activeSentenceIndex + 1);
     setActiveSentenceIndex(next);
     indexRef.current = next;
@@ -103,7 +128,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
   }, [activeSentenceIndex, speakCurrent]);
 
   const goToPrevious = useCallback(() => {
-    stopSpeaking();
+    try { stopSpeaking(); } catch (_) {}
     const prev = Math.max(0, activeSentenceIndex - 1);
     setActiveSentenceIndex(prev);
     indexRef.current = prev;
@@ -111,14 +136,14 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
   }, [activeSentenceIndex, speakCurrent]);
 
   const goToSentence = useCallback((index: number) => {
-    stopSpeaking();
+    try { stopSpeaking(); } catch (_) {}
     setActiveSentenceIndex(index);
     indexRef.current = index;
     if (playingRef.current) speakCurrent(index);
   }, [speakCurrent]);
 
   const reset = useCallback(() => {
-    stopSpeaking();
+    try { stopSpeaking(); } catch (_) {}
     setIsPlaying(false);
     playingRef.current = false;
     setActiveSentenceIndex(0);
@@ -130,12 +155,12 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
     if (!voiceEnabled && isPlaying) {
       setIsPlaying(false);
       playingRef.current = false;
-      stopSpeaking();
+      try { stopSpeaking(); } catch (_) {}
     }
   }, [voiceEnabled, isPlaying]);
 
   useEffect(() => {
-    return () => { stopSpeaking(); playingRef.current = false; };
+    return () => { try { stopSpeaking(); } catch (_) {} playingRef.current = false; };
   }, []);
 
   return {
