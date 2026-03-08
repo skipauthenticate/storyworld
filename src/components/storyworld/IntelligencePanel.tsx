@@ -13,6 +13,7 @@ interface IntelligencePanelProps {
   onClose: () => void;
   onCloseCharacters: () => void;
   onCloseThemes?: () => void;
+  className?: string;
 }
 
 export function IntelligencePanel({
@@ -23,10 +24,10 @@ export function IntelligencePanel({
   onClose,
   onCloseCharacters,
   onCloseThemes,
+  className,
 }: IntelligencePanelProps) {
   const [activeTab, setActiveTab] = useState<"annotation" | "characters" | "themes" | "chat">("annotation");
 
-  // Sync tab from external triggers via useEffect (not during render)
   useEffect(() => {
     if (showCharacters) setActiveTab("characters");
   }, [showCharacters]);
@@ -43,7 +44,7 @@ export function IntelligencePanel({
   ];
 
   return (
-    <aside className="w-[340px] min-w-[340px] h-screen flex flex-col border-l border-border bg-card overflow-hidden">
+    <aside className={cn("w-[340px] min-w-[340px] h-full flex flex-col border-l border-border bg-card overflow-hidden", className)}>
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
@@ -77,16 +78,16 @@ export function IntelligencePanel({
       <div className="flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
           {activeTab === "annotation" && (
-            <AnnotationTab selectedSentence={selectedSentence} />
+            <AnnotationTab key="annotation" selectedSentence={selectedSentence} />
           )}
           {activeTab === "characters" && (
-            <CharactersTab book={book} />
+            <CharactersTab key="characters" book={book} />
           )}
           {activeTab === "themes" && (
-            <ThemesTab book={book} />
+            <ThemesTab key="themes" book={book} />
           )}
           {activeTab === "chat" && (
-            <ChatTab book={book} selectedSentence={selectedSentence} />
+            <ChatTab key="chat" book={book} selectedSentence={selectedSentence} />
           )}
         </AnimatePresence>
       </div>
@@ -97,7 +98,6 @@ export function IntelligencePanel({
 function AnnotationTab({ selectedSentence }: { selectedSentence: Sentence | null }) {
   return (
     <motion.div
-      key="annotation"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -124,14 +124,14 @@ function AnnotationTab({ selectedSentence }: { selectedSentence: Sentence | null
               {selectedSentence.type}
             </span>
             {selectedSentence.emotion && (
-              <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-sw-rose/10 text-sw-rose">
+              <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-destructive/10 text-destructive">
                 {selectedSentence.emotion}
               </span>
             )}
           </div>
           {selectedSentence.annotation && (
             <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-gold mb-2 flex items-center gap-1.5">
+              <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-primary mb-2 flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3" />
                 Literary Analysis
               </p>
@@ -159,7 +159,6 @@ function AnnotationTab({ selectedSentence }: { selectedSentence: Sentence | null
 function CharactersTab({ book }: { book: Book }) {
   return (
     <motion.div
-      key="characters"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -195,7 +194,6 @@ function CharactersTab({ book }: { book: Book }) {
 function ThemesTab({ book }: { book: Book }) {
   return (
     <motion.div
-      key="themes"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -248,7 +246,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
     setInput("");
   };
 
-  // Stop all key propagation from chat input to prevent global shortcuts
   const handleKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -260,7 +257,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
   if (engineStatus === 'idle' || engineStatus === 'error') {
     return (
       <motion.div
-        key="chat"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
@@ -294,7 +290,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
   if (engineStatus === 'downloading' || engineStatus === 'loading') {
     return (
       <motion.div
-        key="chat-loading"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
@@ -322,7 +317,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
 
   return (
     <motion.div
-      key="chat-ready"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}

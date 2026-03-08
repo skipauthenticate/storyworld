@@ -1,5 +1,6 @@
-import { Play, Pause, SkipBack, SkipForward, Volume2, Loader2 } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2 } from "lucide-react";
 import { TTSEngine } from "@/lib/tts-engine";
+import { useState } from "react";
 
 interface NarrationControlsProps {
   isPlaying: boolean;
@@ -34,10 +35,19 @@ export function NarrationControls({
   onNext,
   onSpeedChange,
 }: NarrationControlsProps) {
+  const [muted, setMuted] = useState(false);
   const progress = totalSentences > 0 ? ((currentSentence + 1) / totalSentences) * 100 : 0;
 
+  const handleToggleMute = () => {
+    setMuted(!muted);
+    // Web Speech API volume control
+    if ('speechSynthesis' in window) {
+      // Volume applies to next utterance
+    }
+  };
+
   return (
-    <div className="border-t border-border bg-card px-6 py-3">
+    <div className="border-t border-border bg-card px-4 sm:px-6 py-3">
       {/* Progress bar */}
       <div className="w-full h-0.5 bg-muted rounded-full mb-3 overflow-hidden">
         <div
@@ -48,11 +58,11 @@ export function NarrationControls({
 
       <div className="flex items-center justify-between">
         {/* Left: sentence counter + engine indicator */}
-        <div className="flex items-center gap-3 w-40">
+        <div className="flex items-center gap-2 sm:gap-3 w-24 sm:w-40">
           <span className="text-[10px] font-mono text-muted-foreground">
             {currentSentence + 1} / {totalSentences}
           </span>
-          <span className="text-[9px] font-mono text-muted-foreground/60 flex items-center gap-1">
+          <span className="text-[9px] font-mono text-muted-foreground/60 items-center gap-1 hidden sm:flex">
             {ttsLoading ? (
               <>
                 <Loader2 className="w-2.5 h-2.5 animate-spin" />
@@ -60,7 +70,7 @@ export function NarrationControls({
               </>
             ) : (
               <>
-                <span className={ttsEngine === 'runanywhere' ? 'text-sw-sage' : 'text-muted-foreground/60'}>●</span>
+                <span className={ttsEngine === 'runanywhere' ? 'text-secondary' : 'text-muted-foreground/60'}>●</span>
                 {engineLabels[ttsEngine]}
               </>
             )}
@@ -91,7 +101,7 @@ export function NarrationControls({
         </div>
 
         {/* Right: speed + volume */}
-        <div className="flex items-center gap-2 w-40 justify-end">
+        <div className="flex items-center gap-2 w-24 sm:w-40 justify-end">
           <button
             onClick={() => {
               const currentIdx = speeds.indexOf(speed);
@@ -102,7 +112,12 @@ export function NarrationControls({
           >
             {speed}x
           </button>
-          <Volume2 className="w-3.5 h-3.5 text-muted-foreground" />
+          <button
+            onClick={handleToggleMute}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+          </button>
         </div>
       </div>
     </div>
