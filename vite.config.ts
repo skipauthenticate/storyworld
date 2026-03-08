@@ -26,6 +26,10 @@ export default defineConfig(({ mode }) => ({
           src: 'node_modules/@runanywhere/web-onnx/wasm/sherpa/*',
           dest: 'assets',
         },
+        {
+          src: 'node_modules/@runanywhere/web-llamacpp/wasm/*',
+          dest: 'assets',
+        },
       ],
     }),
   ].filter(Boolean),
@@ -37,6 +41,6 @@ export default defineConfig(({ mode }) => ({
   assetsInclude: ['**/*.wasm'],
   worker: { format: 'es' as const },
   optimizeDeps: {
-    exclude: ['@runanywhere/web-onnx'],
+    exclude: ['@runanywhere/web-onnx', '@runanywhere/web-llamacpp'],
   },
 }));
