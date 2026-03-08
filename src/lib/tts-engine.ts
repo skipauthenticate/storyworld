@@ -28,8 +28,8 @@ const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/d
 const MODEL_DIR = '/models/piper-en-lessac';
 
 function getProxyUrl(url: string): string {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  return `https://${projectId}.supabase.co/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  return `${supabaseUrl}/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
 }
 
 /**

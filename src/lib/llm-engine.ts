@@ -36,8 +36,8 @@ const MODEL_ID = 'qwen2.5-0.5b';
 const MODEL_FS_PATH = '/models/qwen2.5-0.5b-instruct-q4_0.gguf';
 
 function getProxyUrl(url: string): string {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  return `https://${projectId}.supabase.co/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  return `${supabaseUrl}/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
 }
 
 /**
