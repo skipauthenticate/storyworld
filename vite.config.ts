@@ -26,6 +26,10 @@ export default defineConfig(({ mode }) => ({
           src: 'node_modules/@runanywhere/web-onnx/wasm/sherpa/*',
           dest: 'assets',
         },
+        {
+          src: 'node_modules/@runanywhere/web-llamacpp/wasm/*',
+          dest: 'assets',
+        },
       ],
     }),
   ].filter(Boolean),

@@ -1,24 +1,19 @@
 /**
  * STORYWORLD LLM Engine
  * 
- * Uses RunAnywhere Web SDK (llama.cpp WASM) for on-device LLM inference
- * with Qwen2.5-0.5B-Instruct model.
+ * Uses RunAnywhere Web SDK (@runanywhere/web-llamacpp) for on-device LLM inference
+ * with Qwen2.5-0.5B-Instruct model via llama.cpp WASM.
  */
 
 export type LLMEngineStatus = 'idle' | 'downloading' | 'loading' | 'ready' | 'error';
 
 interface LLMState {
   status: LLMEngineStatus;
-  progress: number; // 0-100 download progress
+  progress: number;
   error: string | null;
 }
 
-let llmState: LLMState = {
-  status: 'idle',
-  progress: 0,
-  error: null,
-};
-
+let llmState: LLMState = { status: 'idle', progress: 0, error: null };
 let initPromise: Promise<boolean> | null = null;
 const stateListeners: Set<(state: LLMState) => void> = new Set();
 
@@ -38,10 +33,10 @@ export function getLLMState(): LLMState {
 
 const MODEL_URL = 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf';
 const MODEL_ID = 'qwen2.5-0.5b';
-const MODEL_LOCAL_PATH = '/models/qwen2.5-0.5b-instruct-q4_0.gguf';
+const MODEL_FS_PATH = '/models/qwen2.5-0.5b-instruct-q4_0.gguf';
 
 /**
- * Initialize the on-device LLM. Downloads model on first use (~350MB).
+ * Initialize the on-device LLM. Downloads ~350MB model on first use.
  */
 export async function initLLM(): Promise<boolean> {
   if (initPromise) return initPromise;
@@ -49,52 +44,69 @@ export async function initLLM(): Promise<boolean> {
 
   initPromise = (async () => {
     try {
-      updateState({ status: 'downloading', progress: 0 });
+      updateState({ status: 'loading', progress: 0 });
 
-      const { RunAnywhere, SDKEnvironment, TextGeneration } = await import('@runanywhere/web');
+      const { RunAnywhere, SDKEnvironment } = await import('@runanywhere/web');
+      const { LlamaCPP, LlamaCppBridge, TextGeneration } = await import('@runanywhere/web-llamacpp');
+
+      // Set WASM URL (copied by vite-plugin-static-copy)
+      LlamaCppBridge.shared.wasmUrl = new URL('/assets/racommons-llamacpp.js', window.location.origin).href;
 
       if (!RunAnywhere.isInitialized) {
         await RunAnywhere.initialize({ environment: SDKEnvironment.Development, debug: false });
       }
+      if (!LlamaCPP.isRegistered) {
+        await LlamaCPP.register();
+      }
 
-      // Download model with progress tracking
-      console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B model...');
+      // Ensure WASM is loaded
+      await LlamaCppBridge.shared.ensureLoaded('cpu');
+      console.log('[STORYWORLD LLM] llama.cpp WASM loaded');
+
+      // Download model with progress
+      updateState({ status: 'downloading', progress: 0 });
+      console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B (~350MB)...');
+
       const response = await fetch(MODEL_URL);
-      if (!response.ok) throw new Error(`Failed to download model: ${response.status}`);
+      if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
 
       const contentLength = Number(response.headers.get('content-length') || 0);
-      const reader = response.body!.getReader();
-      const chunks: Uint8Array[] = [];
-      let received = 0;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        if (contentLength > 0) {
+      // Stream directly into WASM FS if possible, else buffer
+      if (contentLength > 0) {
+        // Buffer approach with progress tracking
+        const reader = response.body!.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
           updateState({ progress: Math.round((received / contentLength) * 100) });
         }
+
+        const modelData = new Uint8Array(received);
+        let offset = 0;
+        for (const chunk of chunks) {
+          modelData.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        console.log(`[STORYWORLD LLM] Downloaded: ${(received / 1e6).toFixed(1)}MB`);
+
+        // Write to WASM virtual filesystem
+        LlamaCppBridge.shared.writeFile(MODEL_FS_PATH, modelData);
+      } else {
+        // Stream directly to FS
+        await LlamaCppBridge.shared.writeFileStream(MODEL_FS_PATH, response.body!);
       }
 
-      // Combine chunks
-      const modelData = new Uint8Array(received);
-      let offset = 0;
-      for (const chunk of chunks) {
-        modelData.set(chunk, offset);
-        offset += chunk.length;
-      }
-
-      console.log(`[STORYWORLD LLM] Model downloaded: ${(received / 1e6).toFixed(1)}MB`);
+      // Load model
       updateState({ status: 'loading', progress: 100 });
-
-      // Write model to WASM virtual FS and load
-      // TextGeneration.loadModel accepts a URL or path - we'll use a blob URL
-      const blob = new Blob([modelData], { type: 'application/octet-stream' });
-      const blobUrl = URL.createObjectURL(blob);
-
-      await TextGeneration.loadModel(blobUrl, MODEL_ID);
-      URL.revokeObjectURL(blobUrl);
+      console.log('[STORYWORLD LLM] Loading model into llama.cpp...');
+      await TextGeneration.loadModel(MODEL_FS_PATH, MODEL_ID, 'Qwen2.5-0.5B-Instruct');
 
       updateState({ status: 'ready', progress: 100, error: null });
       console.log('[STORYWORLD LLM] ✓ Qwen2.5-0.5B ready for inference');
@@ -117,8 +129,7 @@ export interface ChatMessage {
 }
 
 /**
- * Generate a chat response using the on-device LLM.
- * Streams tokens via onToken callback.
+ * Generate a chat response using the on-device LLM with streaming.
  */
 export async function chatGenerate(
   messages: ChatMessage[],
@@ -136,37 +147,33 @@ export async function chatGenerate(
     if (!ok) throw new Error('LLM engine not available');
   }
 
-  const { TextGeneration } = await import('@runanywhere/web');
-
-  // Format messages into a prompt (ChatML format for Qwen)
+  const { TextGeneration } = await import('@runanywhere/web-llamacpp');
   const prompt = formatChatMLPrompt(messages);
 
   try {
-    // Try streaming first
-    const { stream } = await TextGeneration.generateStream(prompt, {
+    // Try streaming
+    const streamResult = await TextGeneration.generateStream(prompt, {
       maxTokens,
       temperature,
     });
 
     let fullText = '';
-    for await (const chunk of stream) {
-      const token = chunk.text || chunk.token || '';
+    for await (const chunk of streamResult.tokens) {
+      const token = typeof chunk === 'string' ? chunk : (chunk as any).text || '';
       if (token) {
         fullText += token;
         onToken?.(token);
       }
     }
 
+    // Clean up any trailing ChatML tokens
+    fullText = cleanResponse(fullText);
     onDone?.(fullText);
     return fullText;
   } catch (streamErr) {
-    console.warn('[STORYWORLD LLM] Streaming failed, using non-streaming:', streamErr);
-    // Fallback to non-streaming
-    const result = await TextGeneration.generate(prompt, {
-      maxTokens,
-      temperature,
-    });
-    const text = result.text || '';
+    console.warn('[STORYWORLD LLM] Streaming failed, trying non-streaming:', streamErr);
+    const result = await TextGeneration.generate(prompt, { maxTokens, temperature });
+    const text = cleanResponse(result.text || '');
     onToken?.(text);
     onDone?.(text);
     return text;
@@ -180,4 +187,18 @@ function formatChatMLPrompt(messages: ChatMessage[]): string {
   }
   prompt += '<|im_start|>assistant\n';
   return prompt;
+}
+
+function cleanResponse(text: string): string {
+  // Remove any trailing ChatML tokens
+  return text
+    .replace(/<\|im_end\|>.*$/s, '')
+    .replace(/<\|im_start\|>.*$/s, '')
+    .trim();
+}
+
+export function cancelGeneration() {
+  import('@runanywhere/web-llamacpp').then(({ TextGeneration }) => {
+    TextGeneration.cancel();
+  });
 }
