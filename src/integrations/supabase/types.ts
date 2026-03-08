@@ -14,7 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      experiments: {
+        Row: {
+          after_value: string | null
+          applied: boolean
+          before_value: string | null
+          composite_score: number | null
+          created_at: string
+          description: string
+          domain: string
+          id: string
+          score_coherence: number | null
+          score_insight: number | null
+          score_merit: number | null
+          score_originality: number | null
+          status: string
+          target_id: string | null
+        }
+        Insert: {
+          after_value?: string | null
+          applied?: boolean
+          before_value?: string | null
+          composite_score?: number | null
+          created_at?: string
+          description: string
+          domain: string
+          id?: string
+          score_coherence?: number | null
+          score_insight?: number | null
+          score_merit?: number | null
+          score_originality?: number | null
+          status?: string
+          target_id?: string | null
+        }
+        Update: {
+          after_value?: string | null
+          applied?: boolean
+          before_value?: string | null
+          composite_score?: number | null
+          created_at?: string
+          description?: string
+          domain?: string
+          id?: string
+          score_coherence?: number | null
+          score_insight?: number | null
+          score_merit?: number | null
+          score_originality?: number | null
+          status?: string
+          target_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
