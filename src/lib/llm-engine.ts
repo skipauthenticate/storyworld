@@ -72,7 +72,7 @@ export async function initLLM(): Promise<boolean> {
       updateState({ status: 'downloading', progress: 0 });
       console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B (~350MB)...');
 
-      const response = await fetch(MODEL_URL);
+      const response = await fetch(getProxyUrl(MODEL_URL));
       if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
 
       const contentLength = Number(response.headers.get('content-length') || 0);

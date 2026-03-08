@@ -62,7 +62,7 @@ export async function initTTS(): Promise<TTSEngine> {
 
       // Download the tar.gz archive
       console.log('[STORYWORLD] Downloading Piper TTS archive (~75MB)...');
-      const response = await fetch(TTS_ARCHIVE_URL);
+      const response = await fetch(getProxyUrl(TTS_ARCHIVE_URL));
       if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
       const archiveData = new Uint8Array(await response.arrayBuffer());
       console.log(`[STORYWORLD] Archive downloaded: ${(archiveData.byteLength / 1e6).toFixed(1)}MB`);
