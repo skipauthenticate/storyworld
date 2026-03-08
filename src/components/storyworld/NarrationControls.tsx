@@ -1,4 +1,4 @@
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2, Brain } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2, Zap } from "lucide-react";
 import { TTSEngine } from "@/lib/tts-engine";
 import { cn } from "@/lib/utils";
 
