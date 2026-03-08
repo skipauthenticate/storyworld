@@ -8,26 +8,27 @@ import { WelcomeScreen } from "@/components/storyworld/WelcomeScreen";
 import { KeyboardHints } from "@/components/storyworld/KeyboardHints";
 import { useNarration } from "@/hooks/useNarration";
 import { useReadingProgress } from "@/hooks/useReadingProgress";
+import { useAutoResearch } from "@/hooks/useAutoResearch";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Brain } from "lucide-react";
 import { ThemeToggle } from "@/components/storyworld/ThemeToggle";
 
-type ReadingMode = "classic" | "narrated" | "immersive";
-
 const Index = () => {
   const [books] = useState<Book[]>(sampleBooks);
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
-  const [readingMode, setReadingMode] = useState<ReadingMode>("immersive");
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [intelligenceEnabled, setIntelligenceEnabled] = useState(true);
   const [speed, setSpeed] = useState(1.0);
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
-  const [showIntelligence, setShowIntelligence] = useState(true);
   const [showCharacters, setShowCharacters] = useState(false);
   const [showThemes, setShowThemes] = useState(false);
   const isMobile = useIsMobile();
 
   const allSentences = activeChapter?.scenes.flatMap((s) => s.sentences) ?? [];
+
+  const { triggerImprovement } = useAutoResearch();
 
   const {
     isPlaying,
@@ -39,11 +40,10 @@ const Index = () => {
     goToPrevious,
     goToSentence,
     setSpeed: setNarrationSpeed,
-    reset: resetNarration,
   } = useNarration({
     sentences: allSentences,
     speed,
-    readingMode,
+    voiceEnabled,
   });
 
   const { save: saveProgress, load: loadProgress } = useReadingProgress(
@@ -51,14 +51,12 @@ const Index = () => {
     activeChapter?.id ?? null
   );
 
-  // Save progress as narration advances
   useEffect(() => {
     if (activeBook && activeChapter) {
       saveProgress(activeSentenceIndex);
     }
   }, [activeSentenceIndex, activeBook, activeChapter, saveProgress]);
 
-  // Restore progress on initial load
   useEffect(() => {
     const progress = loadProgress();
     if (progress) {
@@ -86,21 +84,25 @@ const Index = () => {
   const handleSelectChapter = useCallback((chapter: Chapter) => {
     setActiveChapter(chapter);
     setSelectedSentence(null);
-  }, []);
+    // Silently trigger background improvement on chapter change
+    triggerImprovement("annotations");
+  }, [triggerImprovement]);
 
   const handleSelectSentence = useCallback((sentence: Sentence) => {
     setSelectedSentence(sentence);
     const idx = allSentences.findIndex((s) => s.id === sentence.id);
     if (idx >= 0) goToSentence(idx);
-    if (readingMode === "immersive") setShowIntelligence(true);
-  }, [allSentences, readingMode, goToSentence]);
+    if (intelligenceEnabled) {
+      // already visible
+    }
+    // Silently trigger background improvement on sentence interaction
+    triggerImprovement("annotations");
+  }, [allSentences, intelligenceEnabled, goToSentence, triggerImprovement]);
 
   const handleTogglePlay = useCallback(() => {
-    if (readingMode === "classic") {
-      setReadingMode("narrated");
-    }
+    if (!voiceEnabled) setVoiceEnabled(true);
     togglePlay();
-  }, [readingMode, togglePlay]);
+  }, [voiceEnabled, togglePlay]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -117,28 +119,13 @@ const Index = () => {
         case "ArrowRight":
           goToNext();
           break;
-        case "1":
-          if (e.metaKey || e.ctrlKey) { e.preventDefault(); setReadingMode("classic"); }
-          break;
-        case "2":
-          if (e.metaKey || e.ctrlKey) { e.preventDefault(); setReadingMode("narrated"); }
-          break;
-        case "3":
-          if (e.metaKey || e.ctrlKey) { e.preventDefault(); setReadingMode("immersive"); }
-          break;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [handleTogglePlay, goToPrevious, goToNext]);
 
-  const showNarrationBar = readingMode !== "classic" && activeChapter;
-  const showRightPanel = readingMode === "immersive" && showIntelligence && activeBook;
-
-  // Compute dynamic progress
-  const dynamicProgress = allSentences.length > 0
-    ? Math.round((activeSentenceIndex / allSentences.length) * 100)
-    : 0;
+  const showRightPanel = intelligenceEnabled && activeBook;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -146,19 +133,17 @@ const Index = () => {
         books={books}
         activeBook={activeBook}
         activeChapterId={activeChapter?.id ?? null}
-        readingMode={readingMode}
         onSelectBook={handleSelectBook}
         onSelectChapter={handleSelectChapter}
-        onSetMode={setReadingMode}
         onShowCharacters={() => {
           setShowCharacters(true);
           setShowThemes(false);
-          setShowIntelligence(true);
+          setIntelligenceEnabled(true);
         }}
         onShowThemes={() => {
           setShowThemes(true);
           setShowCharacters(false);
-          setShowIntelligence(true);
+          setIntelligenceEnabled(true);
         }}
       />
 
@@ -169,23 +154,25 @@ const Index = () => {
               chapter={activeChapter}
               activeSentenceIndex={activeSentenceIndex}
               isPlaying={isPlaying}
-              readingMode={readingMode}
+              voiceEnabled={voiceEnabled}
               onSelectSentence={handleSelectSentence}
             />
-            {showNarrationBar && (
-              <NarrationControls
-                isPlaying={isPlaying}
-                speed={speed}
-                currentSentence={activeSentenceIndex}
-                totalSentences={allSentences.length}
-                ttsEngine={ttsEngine}
-                ttsLoading={ttsLoading}
-                onTogglePlay={handleTogglePlay}
-                onPrevious={goToPrevious}
-                onNext={goToNext}
-                onSpeedChange={setSpeed}
-              />
-            )}
+            <NarrationControls
+              isPlaying={isPlaying}
+              speed={speed}
+              currentSentence={activeSentenceIndex}
+              totalSentences={allSentences.length}
+              ttsEngine={ttsEngine}
+              ttsLoading={ttsLoading}
+              voiceEnabled={voiceEnabled}
+              intelligenceEnabled={intelligenceEnabled}
+              onTogglePlay={handleTogglePlay}
+              onPrevious={goToPrevious}
+              onNext={goToNext}
+              onSpeedChange={setSpeed}
+              onToggleVoice={() => setVoiceEnabled((v) => !v)}
+              onToggleIntelligence={() => setIntelligenceEnabled((v) => !v)}
+            />
           </>
         ) : (
           <WelcomeScreen books={books} onSelectBook={handleSelectBook} />
@@ -199,28 +186,30 @@ const Index = () => {
           book={activeBook}
           showCharacters={showCharacters}
           showThemes={showThemes}
-          onClose={() => setShowIntelligence(false)}
+          onClose={() => setIntelligenceEnabled(false)}
           onCloseCharacters={() => setShowCharacters(false)}
           onCloseThemes={() => setShowThemes(false)}
         />
       )}
 
-      {isMobile && activeBook && readingMode === "immersive" && (
+      {isMobile && activeBook && (
         <>
-          <button
-            onClick={() => setShowIntelligence(true)}
-            className="fixed bottom-20 right-3 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg"
-          >
-            <Brain className="w-4 h-4" />
-          </button>
-          <Sheet open={showIntelligence} onOpenChange={setShowIntelligence}>
+          {!intelligenceEnabled && (
+            <button
+              onClick={() => setIntelligenceEnabled(true)}
+              className="fixed bottom-20 right-3 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg"
+            >
+              <Brain className="w-4 h-4" />
+            </button>
+          )}
+          <Sheet open={intelligenceEnabled} onOpenChange={setIntelligenceEnabled}>
             <SheetContent side="right" className="w-[320px] p-0 bg-card border-l border-border">
               <IntelligencePanel
                 selectedSentence={selectedSentence}
                 book={activeBook}
                 showCharacters={showCharacters}
                 showThemes={showThemes}
-                onClose={() => setShowIntelligence(false)}
+                onClose={() => setIntelligenceEnabled(false)}
                 onCloseCharacters={() => setShowCharacters(false)}
                 onCloseThemes={() => setShowThemes(false)}
                 className="w-full min-w-0 border-l-0"

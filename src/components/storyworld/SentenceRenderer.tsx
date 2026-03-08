@@ -7,20 +7,16 @@ interface SentenceRendererProps {
   index: number;
   activeSentenceIndex: number;
   isPlaying: boolean;
-  readingMode: "classic" | "narrated" | "immersive";
+  voiceEnabled: boolean;
   onSelect: (sentence: Sentence) => void;
 }
 
 function getHighlightClass(sentence: Sentence): string {
   switch (sentence.type) {
-    case "dialogue":
-      return "highlight-dialogue";
-    case "description":
-      return "highlight-theme";
-    case "thought":
-      return "highlight-emotion";
-    default:
-      return "highlight-narration";
+    case "dialogue": return "highlight-dialogue";
+    case "description": return "highlight-theme";
+    case "thought": return "highlight-emotion";
+    default: return "highlight-narration";
   }
 }
 
@@ -33,11 +29,11 @@ function getStateClass(index: number, activeIndex: number, isPlaying: boolean): 
 
 export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProps>(
   function SentenceRenderer(
-    { sentence, index, activeSentenceIndex, isPlaying, readingMode, onSelect },
+    { sentence, index, activeSentenceIndex, isPlaying, voiceEnabled, onSelect },
     ref
   ) {
     const isActive = index === activeSentenceIndex && isPlaying;
-    const showHighlight = readingMode !== "classic" && isActive;
+    const showHighlight = voiceEnabled && isActive;
 
     return (
       <span

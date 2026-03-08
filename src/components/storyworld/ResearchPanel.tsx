@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useAutoResearch, Experiment } from "@/hooks/useAutoResearch";
 import { cn } from "@/lib/utils";
 import {
@@ -28,32 +28,12 @@ const STATUS_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string }
 };
 
 export function ResearchPanel() {
-  const {
-    experiments,
-    isRunning,
-    error,
-    fetchExperiments,
-    runExperiment,
-  } = useAutoResearch();
-
+  const { experiments, isRunning, error, fetchExperiments } = useAutoResearch();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const hasAutoRun = useRef(false);
 
-  // Fetch on mount + auto-run one experiment if none exist
   useEffect(() => {
-    fetchExperiments().then(() => {
-      if (!hasAutoRun.current) {
-        hasAutoRun.current = true;
-      }
-    });
+    fetchExperiments();
   }, [fetchExperiments]);
-
-  // Auto-run when panel opens and no experiments yet
-  useEffect(() => {
-    if (hasAutoRun.current && experiments.length === 0 && !isRunning) {
-      runExperiment();
-    }
-  }, [experiments.length, isRunning, runExperiment]);
 
   const keepCount = experiments.filter((e) => e.status === "keep").length;
   const totalCount = experiments.length;
@@ -66,7 +46,7 @@ export function ResearchPanel() {
       transition={{ duration: 0.2 }}
       className="flex flex-col h-full"
     >
-      {/* Subtle header with live status */}
+      {/* Status header */}
       <div className="px-4 py-2.5 border-b border-border flex items-center gap-2">
         <AnimatePresence mode="wait">
           {isRunning ? (
@@ -96,16 +76,6 @@ export function ResearchPanel() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Subtle inline trigger — just a text link */}
-        {!isRunning && totalCount > 0 && (
-          <button
-            onClick={() => runExperiment()}
-            className="ml-auto text-[10px] font-mono text-primary/60 hover:text-primary transition-colors"
-          >
-            improve more
-          </button>
-        )}
       </div>
 
       {error && (
@@ -129,7 +99,7 @@ export function ResearchPanel() {
           <div className="flex flex-col items-center justify-center h-48 text-center px-4">
             <Sparkles className="w-6 h-6 text-muted-foreground/20 mb-3" />
             <p className="text-[11px] text-muted-foreground/60">
-              Storyworld continuously refines its literary analysis
+              Improvements appear here as you read
             </p>
           </div>
         )}
