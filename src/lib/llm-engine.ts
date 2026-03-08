@@ -20,7 +20,9 @@ const stateListeners: Set<(state: LLMState) => void> = new Set();
 
 function updateState(partial: Partial<LLMState>) {
   llmState = { ...llmState, ...partial };
-  stateListeners.forEach(fn => fn({ ...llmState }));
+  stateListeners.forEach(fn => {
+    try { fn({ ...llmState }); } catch (_) { /* listener error ignored */ }
+  });
 }
 
 export function onLLMStateChange(fn: (state: LLMState) => void) {
@@ -38,9 +40,14 @@ const MODEL_FS_PATH = '/models/qwen2.5-0.5b-instruct-q4_0.gguf';
 const IDB_DB_NAME = 'storyworld-models';
 const IDB_STORE_NAME = 'models';
 const IDB_KEY = 'qwen2.5-0.5b-instruct-q4_0';
+const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 function getProxyUrl(url: string): string {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl) {
+    console.warn('[STORYWORLD LLM] No VITE_SUPABASE_URL, using direct URL');
+    return url;
+  }
   return `${supabaseUrl}/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
 }
 
@@ -48,12 +55,16 @@ function getProxyUrl(url: string): string {
 
 function openModelDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore(IDB_STORE_NAME);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    try {
+      const req = indexedDB.open(IDB_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE_NAME);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -88,6 +99,18 @@ async function cacheModel(data: Uint8Array): Promise<void> {
   }
 }
 
+/** Helper: fetch with timeout */
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Initialize the on-device LLM. Downloads ~350MB model on first use, caches in IndexedDB.
  */
@@ -99,8 +122,24 @@ export async function initLLM(): Promise<boolean> {
     try {
       updateState({ status: 'loading', progress: 0 });
 
-      const { RunAnywhere, SDKEnvironment } = await import('@runanywhere/web');
-      const { LlamaCPP, LlamaCppBridge, TextGeneration } = await import('@runanywhere/web-llamacpp');
+      let RunAnywhere: any, SDKEnvironment: any;
+      try {
+        const webMod = await import('@runanywhere/web');
+        RunAnywhere = webMod.RunAnywhere;
+        SDKEnvironment = webMod.SDKEnvironment;
+      } catch (importErr) {
+        throw new Error(`Failed to load RunAnywhere SDK: ${importErr instanceof Error ? importErr.message : String(importErr)}`);
+      }
+
+      let LlamaCPP: any, LlamaCppBridge: any, TextGeneration: any;
+      try {
+        const llamaMod = await import('@runanywhere/web-llamacpp');
+        LlamaCPP = llamaMod.LlamaCPP;
+        LlamaCppBridge = llamaMod.LlamaCppBridge;
+        TextGeneration = llamaMod.TextGeneration;
+      } catch (importErr) {
+        throw new Error(`Failed to load llama.cpp module: ${importErr instanceof Error ? importErr.message : String(importErr)}`);
+      }
 
       LlamaCppBridge.shared.wasmUrl = new URL('/assets/racommons-llamacpp.js', window.location.origin).href;
 
@@ -121,27 +160,39 @@ export async function initLLM(): Promise<boolean> {
         console.log(`[STORYWORLD LLM] Loaded from cache: ${(modelData.byteLength / 1e6).toFixed(1)}MB`);
         updateState({ status: 'loading', progress: 100 });
       } else {
-        // Download model with progress
+        // Download model with progress and timeout
         updateState({ status: 'downloading', progress: 0 });
         console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B (~350MB)...');
 
-        const response = await fetch(getProxyUrl(MODEL_URL));
+        const response = await fetchWithTimeout(getProxyUrl(MODEL_URL), DOWNLOAD_TIMEOUT_MS);
         if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
 
+        if (!response.body) {
+          throw new Error('Download response has no body — browser may not support streaming');
+        }
+
         const contentLength = Number(response.headers.get('content-length') || 0);
-        const reader = response.body!.getReader();
+        const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
         let received = 0;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.length;
-          if (contentLength > 0) {
-            updateState({ progress: Math.round((received / contentLength) * 100) });
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+              chunks.push(value);
+              received += value.length;
+              if (contentLength > 0) {
+                updateState({ progress: Math.round((received / contentLength) * 100) });
+              }
+            }
           }
+        } finally {
+          try { reader.releaseLock(); } catch (_) { /* ignore */ }
         }
+
+        if (received === 0) throw new Error('Downloaded 0 bytes — check network connection');
 
         modelData = new Uint8Array(received);
         let offset = 0;
@@ -152,10 +203,10 @@ export async function initLLM(): Promise<boolean> {
 
         console.log(`[STORYWORLD LLM] Downloaded: ${(received / 1e6).toFixed(1)}MB`);
 
-        // Cache for next time
+        // Cache for next time (fire-and-forget)
         cacheModel(modelData).then(() => {
           console.log('[STORYWORLD LLM] Model cached in IndexedDB');
-        });
+        }).catch(() => { /* caching failure is non-fatal */ });
       }
 
       // Write to WASM virtual filesystem
@@ -205,7 +256,14 @@ export async function chatGenerate(
     if (!ok) throw new Error('LLM engine not available');
   }
 
-  const { TextGeneration } = await import('@runanywhere/web-llamacpp');
+  let TextGeneration: any;
+  try {
+    const mod = await import('@runanywhere/web-llamacpp');
+    TextGeneration = mod.TextGeneration;
+  } catch (importErr) {
+    throw new Error(`Failed to load llama.cpp for generation: ${importErr instanceof Error ? importErr.message : String(importErr)}`);
+  }
+
   const prompt = formatChatMLPrompt(messages);
 
   try {
@@ -218,20 +276,24 @@ export async function chatGenerate(
     for await (const token of streamResult.stream) {
       if (token) {
         fullText += token;
-        onToken?.(token);
+        try { onToken?.(token); } catch (_) { /* callback error ignored */ }
       }
     }
 
     fullText = cleanResponse(fullText);
-    onDone?.(fullText);
+    try { onDone?.(fullText); } catch (_) { /* callback error ignored */ }
     return fullText;
   } catch (streamErr) {
     console.warn('[STORYWORLD LLM] Streaming failed, trying non-streaming:', streamErr);
-    const result = await TextGeneration.generate(prompt, { maxTokens, temperature });
-    const text = cleanResponse(result.text || '');
-    onToken?.(text);
-    onDone?.(text);
-    return text;
+    try {
+      const result = await TextGeneration.generate(prompt, { maxTokens, temperature });
+      const text = cleanResponse(result.text || '');
+      try { onToken?.(text); } catch (_) { /* ignored */ }
+      try { onDone?.(text); } catch (_) { /* ignored */ }
+      return text;
+    } catch (fallbackErr) {
+      throw new Error(`LLM generation failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`);
+    }
   }
 }
 
@@ -252,7 +314,11 @@ function cleanResponse(text: string): string {
 }
 
 export function cancelGeneration() {
-  import('@runanywhere/web-llamacpp').then(({ TextGeneration }) => {
-    TextGeneration.cancel();
-  });
+  try {
+    import('@runanywhere/web-llamacpp').then(({ TextGeneration }) => {
+      try { TextGeneration.cancel(); } catch (_) { /* ignore */ }
+    }).catch(() => { /* module not loaded, nothing to cancel */ });
+  } catch (_) {
+    /* ignore */
+  }
 }

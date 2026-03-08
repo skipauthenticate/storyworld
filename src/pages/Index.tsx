@@ -51,19 +51,23 @@ const Index = () => {
 
   useEffect(() => {
     if (activeBook && activeChapter) {
-      saveProgress(activeSentenceIndex);
+      try { saveProgress(activeSentenceIndex); } catch (_) { /* ignore save errors */ }
     }
   }, [activeSentenceIndex, activeBook, activeChapter, saveProgress]);
 
   useEffect(() => {
-    const progress = loadProgress();
-    if (progress) {
-      const book = books.find((b) => b.id === progress.bookId);
-      if (book && book.chapters.length > 0) {
-        setActiveBook(book);
-        const chapter = book.chapters.find((c) => c.id === progress.chapterId);
-        setActiveChapter(chapter ?? book.chapters[0]);
+    try {
+      const progress = loadProgress();
+      if (progress) {
+        const book = books.find((b) => b.id === progress.bookId);
+        if (book && book.chapters.length > 0) {
+          setActiveBook(book);
+          const chapter = book.chapters.find((c) => c.id === progress.chapterId);
+          setActiveChapter(chapter ?? book.chapters[0]);
+        }
       }
+    } catch (err) {
+      console.warn('[Index] Failed to load reading progress:', err);
     }
   }, []);
 
@@ -97,21 +101,25 @@ const Index = () => {
     togglePlay();
   }, [voiceEnabled, togglePlay]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — wrapped in try/catch so nothing crashes the app
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      switch (e.key) {
-        case " ":
-          e.preventDefault();
-          handleTogglePlay();
-          break;
-        case "ArrowLeft":
-          goToPrevious();
-          break;
-        case "ArrowRight":
-          goToNext();
-          break;
+      try {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        switch (e.key) {
+          case " ":
+            e.preventDefault();
+            handleTogglePlay();
+            break;
+          case "ArrowLeft":
+            goToPrevious();
+            break;
+          case "ArrowRight":
+            goToNext();
+            break;
+        }
+      } catch (err) {
+        console.warn('[Index] Keyboard handler error:', err);
       }
     };
     window.addEventListener("keydown", handler);

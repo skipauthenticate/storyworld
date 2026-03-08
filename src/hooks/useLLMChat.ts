@@ -14,6 +14,7 @@ export function useLLMChat() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [engineStatus, setEngineStatus] = useState<LLMEngineStatus>(getLLMState().status);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [chatError, setChatError] = useState<string | null>(null);
   const abortRef = useRef(false);
 
   useEffect(() => {
@@ -24,7 +25,15 @@ export function useLLMChat() {
   }, []);
 
   const initEngine = useCallback(async () => {
-    return initLLM();
+    setChatError(null);
+    try {
+      return await initLLM();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to initialize AI engine';
+      console.error('[LLM Chat] Init error:', err);
+      setChatError(msg);
+      return false;
+    }
   }, []);
 
   const sendMessage = useCallback(async (
@@ -32,6 +41,7 @@ export function useLLMChat() {
     systemPrompt?: string
   ) => {
     if (isGenerating || !userText.trim()) return;
+    setChatError(null);
 
     const userMsg: ChatMessage = { role: 'user', content: userText.trim() };
     const allMessages: ChatMessage[] = [
@@ -77,10 +87,12 @@ export function useLLMChat() {
         },
       });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[LLM Chat] Error:', err);
+      setChatError(msg);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'Sorry, I encountered an error generating a response.' },
+        { role: 'assistant', content: 'Sorry, I encountered an error generating a response. Please try again.' },
       ]);
     } finally {
       setIsGenerating(false);
@@ -89,12 +101,13 @@ export function useLLMChat() {
 
   const cancel = useCallback(() => {
     abortRef.current = true;
-    cancelGeneration();
+    try { cancelGeneration(); } catch (_) { /* ignore */ }
     setIsGenerating(false);
   }, []);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    setChatError(null);
   }, []);
 
   return {
@@ -102,6 +115,7 @@ export function useLLMChat() {
     isGenerating,
     engineStatus,
     downloadProgress,
+    chatError,
     sendMessage,
     cancel,
     clearMessages,

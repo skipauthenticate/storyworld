@@ -28,17 +28,22 @@ export function useAutoResearch() {
   const lastTriggerRef = useRef<number>(0);
 
   const fetchExperiments = useCallback(async () => {
-    const { data, error: err } = await supabase
-      .from("experiments")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    try {
+      const { data, error: err } = await supabase
+        .from("experiments")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
 
-    if (err) {
-      console.error("Failed to fetch experiments:", err);
-      return;
+      if (err) {
+        console.error("Failed to fetch experiments:", err);
+        return;
+      }
+      setExperiments((data as unknown as Experiment[]) || []);
+    } catch (networkErr) {
+      console.error("[AutoResearch] Network error fetching experiments:", networkErr);
+      // Don't throw — just leave experiments as-is
     }
-    setExperiments((data as unknown as Experiment[]) || []);
   }, []);
 
   const runExperiment = useCallback(async (domain?: string) => {
@@ -48,7 +53,10 @@ export function useAutoResearch() {
 
     try {
       const gatsby = sampleBooks.find((b) => b.id === "gatsby");
-      if (!gatsby) throw new Error("No book data");
+      if (!gatsby) {
+        console.warn("[AutoResearch] No book data available, skipping");
+        return;
+      }
 
       const bookData = {
         title: gatsby.title,
@@ -102,18 +110,28 @@ export function useAutoResearch() {
     }
   }, [isRunning, experiments]);
 
-  // Debounced trigger for background auto-improvement
+  // Debounced trigger for background auto-improvement — NEVER throws
   const triggerImprovement = useCallback((domain?: string) => {
-    const now = Date.now();
-    if (now - lastTriggerRef.current < DEBOUNCE_MS) return;
-    if (isRunning) return;
-    lastTriggerRef.current = now;
-    runExperiment(domain);
+    try {
+      const now = Date.now();
+      if (now - lastTriggerRef.current < DEBOUNCE_MS) return;
+      if (isRunning) return;
+      lastTriggerRef.current = now;
+      runExperiment(domain).catch((err) => {
+        console.warn("[AutoResearch] Background trigger failed:", err);
+      });
+    } catch (err) {
+      console.warn("[AutoResearch] triggerImprovement error:", err);
+    }
   }, [isRunning, runExperiment]);
 
   const runLoop = useCallback(async (count: number = 3, domain?: string) => {
     for (let i = 0; i < count; i++) {
-      await runExperiment(domain);
+      try {
+        await runExperiment(domain);
+      } catch (err) {
+        console.warn(`[AutoResearch] Loop iteration ${i} failed:`, err);
+      }
       await new Promise((r) => setTimeout(r, 1000));
     }
   }, [runExperiment]);

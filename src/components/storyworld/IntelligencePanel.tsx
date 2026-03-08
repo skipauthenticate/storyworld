@@ -1,5 +1,5 @@
 import { Sentence, Book } from "@/data/sampleBooks";
-import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Brain, ChevronUp } from "lucide-react";
+import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Zap, ChevronUp, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
@@ -161,6 +161,7 @@ function PersistentChat({
     isGenerating,
     engineStatus,
     downloadProgress,
+    chatError,
     sendMessage,
     cancel,
     clearMessages,
@@ -178,23 +179,30 @@ function PersistentChat({
 
   const systemPrompt = `You are a literary analysis AI assistant embedded in a reading app called Storyworld. You are currently helping the reader analyze "${book.title}" by ${book.author}. The book's themes include: ${book.themes.join(', ')}. Characters include: ${book.characters.map(c => `${c.name} (${c.description})`).join('; ')}. ${selectedSentence ? `The reader has selected this passage: "${selectedSentence.text}"` : ''} Provide insightful, concise literary analysis. Keep responses under 150 words.`;
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim() || isGenerating) return;
     if (engineStatus !== 'ready') {
-      initEngine();
+      try {
+        await initEngine();
+      } catch (err) {
+        console.warn('[IntelligencePanel] initEngine failed:', err);
+      }
       return;
     }
-    sendMessage(input, systemPrompt);
+    const text = input;
     setInput("");
     if (!expanded) onToggleExpand();
+    sendMessage(text, systemPrompt);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    e.stopPropagation();
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    try {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    } catch (_) { /* ignore keyboard handler errors */ }
   };
 
   const isLoading = engineStatus === 'downloading' || engineStatus === 'loading';
@@ -208,7 +216,7 @@ function PersistentChat({
         className="flex items-center justify-between px-4 py-2 hover:bg-muted/30 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Brain className="w-3 h-3 text-primary" />
+          <Zap className="w-3 h-3 text-primary" />
           <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground">
             AI Chat
           </span>
@@ -238,16 +246,22 @@ function PersistentChat({
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2.5">
               {needsInit && messages.length === 0 && (
                 <div className="text-center py-4">
-                  <Brain className="w-6 h-6 text-primary/30 mx-auto mb-2" />
+                  <Zap className="w-6 h-6 text-primary/30 mx-auto mb-2" />
                   <p className="text-[11px] text-muted-foreground mb-2">
                     On-device AI · No data leaves your browser
                   </p>
+                  {engineStatus === 'error' && chatError && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-destructive mb-2 justify-center">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>Failed to load — tap to retry</span>
+                    </div>
+                  )}
                   <button
                     onClick={initEngine}
                     className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-[11px] font-mono hover:bg-primary/90 transition-colors inline-flex items-center gap-1.5"
                   >
                     <Download className="w-3 h-3" />
-                    Download Model (~350MB)
+                    {engineStatus === 'error' ? 'Retry Download' : 'Download Model (~350MB)'}
                   </button>
                   <p className="text-[9px] text-muted-foreground/50 mt-2">One-time download, cached locally</p>
                 </div>
