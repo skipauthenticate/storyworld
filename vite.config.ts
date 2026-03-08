@@ -11,11 +11,20 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  assetsInclude: ['**/*.wasm'],
+  worker: { format: 'es' as const },
+  optimizeDeps: {
+    exclude: ['@runanywhere/web-onnx'],
   },
 }));
