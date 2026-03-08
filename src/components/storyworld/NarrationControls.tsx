@@ -1,11 +1,13 @@
-import { Play, Pause, SkipBack, SkipForward, Volume2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Play, Pause, SkipBack, SkipForward, Volume2, Loader2 } from "lucide-react";
+import { TTSEngine } from "@/lib/tts-engine";
 
 interface NarrationControlsProps {
   isPlaying: boolean;
   speed: number;
   currentSentence: number;
   totalSentences: number;
+  ttsEngine: TTSEngine;
+  ttsLoading: boolean;
   onTogglePlay: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -14,11 +16,19 @@ interface NarrationControlsProps {
 
 const speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
 
+const engineLabels: Record<TTSEngine, string> = {
+  runanywhere: "Piper Neural TTS",
+  webspeech: "Web Speech API",
+  none: "No TTS",
+};
+
 export function NarrationControls({
   isPlaying,
   speed,
   currentSentence,
   totalSentences,
+  ttsEngine,
+  ttsLoading,
   onTogglePlay,
   onPrevious,
   onNext,
@@ -37,9 +47,24 @@ export function NarrationControls({
       </div>
 
       <div className="flex items-center justify-between">
-        {/* Left: sentence counter */}
-        <div className="text-[10px] font-mono text-muted-foreground w-24">
-          {currentSentence + 1} / {totalSentences}
+        {/* Left: sentence counter + engine indicator */}
+        <div className="flex items-center gap-3 w-40">
+          <span className="text-[10px] font-mono text-muted-foreground">
+            {currentSentence + 1} / {totalSentences}
+          </span>
+          <span className="text-[9px] font-mono text-muted-foreground/60 flex items-center gap-1">
+            {ttsLoading ? (
+              <>
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <span className={ttsEngine === 'runanywhere' ? 'text-sw-sage' : 'text-muted-foreground/60'}>●</span>
+                {engineLabels[ttsEngine]}
+              </>
+            )}
+          </span>
         </div>
 
         {/* Center: playback controls */}
@@ -52,7 +77,8 @@ export function NarrationControls({
           </button>
           <button
             onClick={onTogglePlay}
-            className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            disabled={ttsLoading || ttsEngine === 'none'}
+            className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
           </button>
@@ -65,7 +91,7 @@ export function NarrationControls({
         </div>
 
         {/* Right: speed + volume */}
-        <div className="flex items-center gap-2 w-24 justify-end">
+        <div className="flex items-center gap-2 w-40 justify-end">
           <button
             onClick={() => {
               const currentIdx = speeds.indexOf(speed);
