@@ -1,5 +1,5 @@
 import { Book, Chapter } from "@/data/sampleBooks";
-import { BookOpen, ChevronRight, Menu, Plus } from "lucide-react";
+import { BookOpen, ChevronRight, Menu, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef } from "react";
