@@ -110,6 +110,15 @@ const Index = () => {
     setSelectedSentence(null);
   }, []);
 
+  const handleDeleteBook = useCallback((bookId: string) => {
+    setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    if (activeBook?.id === bookId) {
+      setActiveBook(null);
+      setActiveChapter(null);
+      setSelectedSentence(null);
+    }
+  }, [activeBook]);
+
   const handlePrevChapter = useCallback(() => {
     if (!activeBook || !activeChapter) return;
     const idx = activeBook.chapters.findIndex((c) => c.id === activeChapter.id);
@@ -189,6 +198,7 @@ const Index = () => {
         onSelectBook={handleSelectBook}
         onSelectChapter={handleSelectChapter}
         onImportEpub={handleImportEpub}
+        onDeleteBook={handleDeleteBook}
         importing={importing}
       />
 

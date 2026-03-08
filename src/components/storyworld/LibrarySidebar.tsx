@@ -1,5 +1,5 @@
 import { Book, Chapter } from "@/data/sampleBooks";
-import { BookOpen, ChevronRight, Menu, Plus } from "lucide-react";
+import { BookOpen, ChevronRight, Menu, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef } from "react";
@@ -13,6 +13,7 @@ interface LibrarySidebarProps {
   onSelectBook: (book: Book) => void;
   onSelectChapter: (chapter: Chapter) => void;
   onImportEpub: (file: File) => void;
+  onDeleteBook: (bookId: string) => void;
   importing: boolean;
 }
 
@@ -23,6 +24,7 @@ function SidebarContent({
   onSelectBook,
   onSelectChapter,
   onImportEpub,
+  onDeleteBook,
   importing,
   onItemClick,
 }: LibrarySidebarProps & { onItemClick?: () => void }) {
@@ -72,7 +74,7 @@ function SidebarContent({
         </div>
         <div className="space-y-1">
           {books.map((book) => (
-            <div key={book.id}>
+            <div key={book.id} className="group">
               <button
                 onClick={() => {
                   onSelectBook(book);
@@ -99,6 +101,20 @@ function SidebarContent({
                   <div className="text-[13px] font-medium truncate">{book.title}</div>
                   <div className="text-[10px] text-muted-foreground truncate">{book.author}</div>
                 </div>
+                {book.id.startsWith("epub-") && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Remove "${book.title}" from library?`)) {
+                        onDeleteBook(book.id);
+                      }
+                    }}
+                    className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                    aria-label={`Delete ${book.title}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
                 {book.chapters.length > 0 ? (
                   <ChevronRight
                     className={cn(

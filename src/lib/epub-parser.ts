@@ -152,7 +152,16 @@ export async function parseEpub(file: File): Promise<Book> {
         /^\s*(cover|title\s+page|copyright|dedication)\s*$/im.test(textLower)
       );
 
-      if (isTocPage || isFrontMatter || isNavContent) continue;
+      // Detect copyright / legal pages by content
+      const hasCopyrightContent = /copyright\s*©|all\s+rights?\s+reserved|rights?\s+(of|to)\s+.*reproduc/i.test(textLower);
+      const isCopyrightPage = hasCopyrightContent && text.length < 3000;
+
+      // Detect title pages: short sections where book title + author appear
+      const isTitlePage = text.length < 1000 &&
+        textLower.includes(title.toLowerCase()) &&
+        textLower.includes(author.toLowerCase());
+
+      if (isTocPage || isFrontMatter || isNavContent || isCopyrightPage || isTitlePage) continue;
       
       // Find TOC label for this spine item
       const tocEntry = toc.find(
@@ -160,8 +169,20 @@ export async function parseEpub(file: File): Promise<Book> {
       );
       const chapterTitle = tocEntry?.label?.trim() || `Chapter ${chapters.length + 1}`;
       
+      // Strip leading copyright/legal paragraphs from content
+      let cleanText = text;
+      if (hasCopyrightContent) {
+        const paragraphs = cleanText.split(/\n\n+/);
+        const firstNonLegal = paragraphs.findIndex(
+          (p) => !/copyright\s*©|all\s+rights?\s+reserved|rights?\s+(of|to)\s+.*reproduc|this\s+publication\s+is\s+protected|non-exclusive|non-transferable|epubbooks|www\./i.test(p)
+        );
+        if (firstNonLegal > 0) {
+          cleanText = paragraphs.slice(firstNonLegal).join("\n\n");
+        }
+      }
+
       // Split into sentences
-      const sentenceTexts = splitIntoSentences(text);
+      const sentenceTexts = splitIntoSentences(cleanText);
       if (sentenceTexts.length === 0) continue;
       
       const sentences: Sentence[] = sentenceTexts.map((s, sIdx) => ({
