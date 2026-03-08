@@ -9,24 +9,31 @@ interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
   book: Book;
   showCharacters: boolean;
+  showThemes?: boolean;
   onClose: () => void;
   onCloseCharacters: () => void;
+  onCloseThemes?: () => void;
 }
 
 export function IntelligencePanel({
   selectedSentence,
   book,
   showCharacters,
+  showThemes,
   onClose,
   onCloseCharacters,
+  onCloseThemes,
 }: IntelligencePanelProps) {
-  const [activeTab, setActiveTab] = useState<"annotation" | "characters" | "themes" | "chat">(
-    showCharacters ? "characters" : "annotation"
-  );
+  const [activeTab, setActiveTab] = useState<"annotation" | "characters" | "themes" | "chat">("annotation");
 
-  if (showCharacters && activeTab !== "characters") {
-    setActiveTab("characters");
-  }
+  // Sync tab from external triggers via useEffect (not during render)
+  useEffect(() => {
+    if (showCharacters) setActiveTab("characters");
+  }, [showCharacters]);
+
+  useEffect(() => {
+    if (showThemes) setActiveTab("themes");
+  }, [showThemes]);
 
   const tabs = [
     { id: "annotation" as const, label: "Annotation", icon: BookOpen },
@@ -227,7 +234,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -242,15 +248,15 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
     setInput("");
   };
 
+  // Stop all key propagation from chat input to prevent global shortcuts
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      e.stopPropagation();
       handleSend();
     }
   };
 
-  // Not yet initialized
   if (engineStatus === 'idle' || engineStatus === 'error') {
     return (
       <motion.div
@@ -285,7 +291,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
     );
   }
 
-  // Downloading / Loading
   if (engineStatus === 'downloading' || engineStatus === 'loading') {
     return (
       <motion.div
@@ -315,7 +320,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
     );
   }
 
-  // Chat ready
   return (
     <motion.div
       key="chat-ready"
@@ -325,7 +329,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
       transition={{ duration: 0.2 }}
       className="flex flex-col h-full"
     >
-      {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && (
           <div className="text-center py-8">
@@ -363,7 +366,6 @@ function ChatTab({ book, selectedSentence }: { book: Book; selectedSentence: Sen
         ))}
       </div>
 
-      {/* Input */}
       <div className="p-3 border-t border-border">
         {messages.length > 0 && (
           <button

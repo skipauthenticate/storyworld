@@ -1,5 +1,6 @@
 import { Chapter, Sentence } from "@/data/sampleBooks";
 import { SentenceRenderer } from "./SentenceRenderer";
+import { useEffect, useRef } from "react";
 
 interface ReadingPanelProps {
   chapter: Chapter;
@@ -16,7 +17,15 @@ export function ReadingPanel({
   readingMode,
   onSelectSentence,
 }: ReadingPanelProps) {
+  const activeSentenceRef = useRef<HTMLSpanElement | null>(null);
   let globalIndex = 0;
+
+  // Auto-scroll to active sentence during narration
+  useEffect(() => {
+    if (isPlaying && activeSentenceRef.current) {
+      activeSentenceRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [activeSentenceIndex, isPlaying]);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -48,9 +57,11 @@ export function ReadingPanel({
             <div className="text-[17.5px] leading-[1.85] tracking-[0.01em] text-foreground">
               {scene.sentences.map((sentence) => {
                 const idx = globalIndex++;
+                const isActive = idx === activeSentenceIndex && isPlaying;
                 return (
                   <SentenceRenderer
                     key={sentence.id}
+                    ref={isActive ? activeSentenceRef : undefined}
                     sentence={sentence}
                     index={idx}
                     activeSentenceIndex={activeSentenceIndex}

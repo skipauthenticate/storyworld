@@ -3,6 +3,7 @@
  * 
  * Uses RunAnywhere Web SDK (@runanywhere/web-llamacpp) for on-device LLM inference
  * with Qwen2.5-0.5B-Instruct model via llama.cpp WASM.
+ * Caches the model in IndexedDB to avoid re-downloading.
  */
 
 export type LLMEngineStatus = 'idle' | 'downloading' | 'loading' | 'ready' | 'error';
@@ -34,14 +35,61 @@ export function getLLMState(): LLMState {
 const MODEL_URL = 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf';
 const MODEL_ID = 'qwen2.5-0.5b';
 const MODEL_FS_PATH = '/models/qwen2.5-0.5b-instruct-q4_0.gguf';
+const IDB_DB_NAME = 'storyworld-models';
+const IDB_STORE_NAME = 'models';
+const IDB_KEY = 'qwen2.5-0.5b-instruct-q4_0';
 
 function getProxyUrl(url: string): string {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   return `${supabaseUrl}/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
 }
 
+// ---- IndexedDB cache helpers ----
+
+function openModelDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(IDB_STORE_NAME);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getCachedModel(): Promise<Uint8Array | null> {
+  try {
+    const db = await openModelDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE_NAME, 'readonly');
+      const store = tx.objectStore(IDB_STORE_NAME);
+      const req = store.get(IDB_KEY);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => db.close();
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function cacheModel(data: Uint8Array): Promise<void> {
+  try {
+    const db = await openModelDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(IDB_STORE_NAME);
+      store.put(data, IDB_KEY);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  } catch (err) {
+    console.warn('[STORYWORLD LLM] Failed to cache model:', err);
+  }
+}
+
 /**
- * Initialize the on-device LLM. Downloads ~350MB model on first use.
+ * Initialize the on-device LLM. Downloads ~350MB model on first use, caches in IndexedDB.
  */
 export async function initLLM(): Promise<boolean> {
   if (initPromise) return initPromise;
@@ -54,7 +102,6 @@ export async function initLLM(): Promise<boolean> {
       const { RunAnywhere, SDKEnvironment } = await import('@runanywhere/web');
       const { LlamaCPP, LlamaCppBridge, TextGeneration } = await import('@runanywhere/web-llamacpp');
 
-      // Set WASM URL (copied by vite-plugin-static-copy)
       LlamaCppBridge.shared.wasmUrl = new URL('/assets/racommons-llamacpp.js', window.location.origin).href;
 
       if (!RunAnywhere.isInitialized) {
@@ -64,22 +111,24 @@ export async function initLLM(): Promise<boolean> {
         await LlamaCPP.register();
       }
 
-      // Ensure WASM is loaded
       await LlamaCppBridge.shared.ensureLoaded('cpu');
       console.log('[STORYWORLD LLM] llama.cpp WASM loaded');
 
-      // Download model with progress
-      updateState({ status: 'downloading', progress: 0 });
-      console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B (~350MB)...');
+      // Try loading from IndexedDB cache first
+      let modelData = await getCachedModel();
 
-      const response = await fetch(getProxyUrl(MODEL_URL));
-      if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
+      if (modelData) {
+        console.log(`[STORYWORLD LLM] Loaded from cache: ${(modelData.byteLength / 1e6).toFixed(1)}MB`);
+        updateState({ status: 'loading', progress: 100 });
+      } else {
+        // Download model with progress
+        updateState({ status: 'downloading', progress: 0 });
+        console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B (~350MB)...');
 
-      const contentLength = Number(response.headers.get('content-length') || 0);
+        const response = await fetch(getProxyUrl(MODEL_URL));
+        if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
 
-      // Stream directly into WASM FS if possible, else buffer
-      if (contentLength > 0) {
-        // Buffer approach with progress tracking
+        const contentLength = Number(response.headers.get('content-length') || 0);
         const reader = response.body!.getReader();
         const chunks: Uint8Array[] = [];
         let received = 0;
@@ -89,10 +138,12 @@ export async function initLLM(): Promise<boolean> {
           if (done) break;
           chunks.push(value);
           received += value.length;
-          updateState({ progress: Math.round((received / contentLength) * 100) });
+          if (contentLength > 0) {
+            updateState({ progress: Math.round((received / contentLength) * 100) });
+          }
         }
 
-        const modelData = new Uint8Array(received);
+        modelData = new Uint8Array(received);
         let offset = 0;
         for (const chunk of chunks) {
           modelData.set(chunk, offset);
@@ -101,12 +152,14 @@ export async function initLLM(): Promise<boolean> {
 
         console.log(`[STORYWORLD LLM] Downloaded: ${(received / 1e6).toFixed(1)}MB`);
 
-        // Write to WASM virtual filesystem
-        LlamaCppBridge.shared.writeFile(MODEL_FS_PATH, modelData);
-      } else {
-        // Stream directly to FS
-        await LlamaCppBridge.shared.writeFileStream(MODEL_FS_PATH, response.body!);
+        // Cache for next time
+        cacheModel(modelData).then(() => {
+          console.log('[STORYWORLD LLM] Model cached in IndexedDB');
+        });
       }
+
+      // Write to WASM virtual filesystem
+      LlamaCppBridge.shared.writeFile(MODEL_FS_PATH, modelData);
 
       // Load model
       updateState({ status: 'loading', progress: 100 });
@@ -156,7 +209,6 @@ export async function chatGenerate(
   const prompt = formatChatMLPrompt(messages);
 
   try {
-    // Try streaming
     const streamResult = await TextGeneration.generateStream(prompt, {
       maxTokens,
       temperature,
@@ -170,7 +222,6 @@ export async function chatGenerate(
       }
     }
 
-    // Clean up any trailing ChatML tokens
     fullText = cleanResponse(fullText);
     onDone?.(fullText);
     return fullText;
@@ -194,7 +245,6 @@ function formatChatMLPrompt(messages: ChatMessage[]): string {
 }
 
 function cleanResponse(text: string): string {
-  // Remove any trailing ChatML tokens
   return text
     .replace(/<\|im_end\|>.*$/s, '')
     .replace(/<\|im_start\|>.*$/s, '')

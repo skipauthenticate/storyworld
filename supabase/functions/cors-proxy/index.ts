@@ -1,6 +1,6 @@
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 };
 
@@ -41,7 +41,24 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Follow redirects and get final response
     const response = await fetch(targetUrl, { redirect: 'follow' });
+
+    // Check if the redirect landed on an allowed host
+    const finalUrl = response.url;
+    if (finalUrl !== targetUrl) {
+      const finalHostname = new URL(finalUrl).hostname.toLowerCase();
+      const isAllowed = ALLOWED_HOSTS.some(h => finalHostname === h || finalHostname.endsWith('.' + h));
+      if (!isAllowed) {
+        // Also allow common CDN hosts for GitHub/HF redirects
+        const cdnHosts = ['github-releases.githubusercontent.com', 'github-cloud.githubusercontent.com', 'github-cloud.s3.amazonaws.com'];
+        const isCdn = cdnHosts.some(h => finalHostname === h || finalHostname.endsWith('.' + h));
+        if (!isCdn) {
+          throw new Error(`Redirect to disallowed host: ${finalHostname}`);
+        }
+      }
+    }
+
     if (!response.ok) {
       throw new Error(`Upstream responded with ${response.status}`);
     }
@@ -56,7 +73,7 @@ Deno.serve(async (req) => {
     return new Response(response.body, { status: 200, headers });
   } catch (error) {
     console.error('Proxy error:', error);
-    return new Response(JSON.stringify({ error: 'Failed to proxy request' }), {
+    return new Response(JSON.stringify({ error: 'Failed to proxy request', detail: String(error) }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
