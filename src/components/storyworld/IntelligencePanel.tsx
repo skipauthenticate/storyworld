@@ -1,9 +1,10 @@
 import { Sentence, Book } from "@/data/sampleBooks";
-import { X, BookOpen, MessageSquare, Sparkles, User, Send, Loader2, Download, Brain } from "lucide-react";
+import { X, BookOpen, MessageSquare, Sparkles, User, Send, Loader2, Download, Brain, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 import { useLLMChat } from "@/hooks/useLLMChat";
+import { ResearchPanel } from "./ResearchPanel";
 
 interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
