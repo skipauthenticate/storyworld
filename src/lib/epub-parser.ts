@@ -62,32 +62,49 @@ function classifySentence(text: string): Sentence["type"] {
 
 /**
  * Extract text content from XHTML/HTML string
+/**
+ * Extract text content from XHTML/HTML string.
+ * Only selects leaf-level block elements to prevent nested duplication.
  */
 function extractText(html: string): string {
   const div = document.createElement("div");
   div.innerHTML = html;
   
-  // Remove script and style elements
-  div.querySelectorAll("script, style").forEach((el) => el.remove());
+  // Remove non-content elements
+  div.querySelectorAll("script, style, nav, header, footer").forEach((el) => el.remove());
   
-  // Get text with paragraph breaks preserved (avoid nested block duplication)
+  const BLOCK_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "LI", "BLOCKQUOTE", "PRE", "FIGCAPTION"]);
+  
+  // Walk the DOM and collect only leaf-level block elements
+  // (blocks that don't contain other blocks)
   const blocks: string[] = [];
-  div.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li, blockquote").forEach((el) => {
+  const allBlocks = div.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, figcaption");
+  
+  allBlocks.forEach((el) => {
+    // Skip if this element contains another block element (not a leaf)
+    const hasNestedBlock = Array.from(el.children).some((child) => BLOCK_TAGS.has(child.tagName));
+    if (hasNestedBlock) return;
+    
     const t = (el as HTMLElement).innerText?.replace(/\s+/g, " ").trim();
-    if (t) blocks.push(t);
+    if (t && t.length > 1) blocks.push(t);
   });
-
-  // If no block elements found, fall back to full innerText
+  
+  // Fallback: if no blocks found, use full innerText
   if (blocks.length === 0) {
     return (div as HTMLElement).innerText?.trim() ?? "";
   }
-
-  // De-duplicate repeated blocks (common in some EPUB DOM structures)
-  const deduped = blocks.filter((block, idx) => {
-    const normalized = block.toLowerCase();
-    return idx === 0 || normalized !== blocks[idx - 1].toLowerCase();
-  });
-
+  
+  // Global de-duplication (not just adjacent) — handles repeated DOM structures
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const block of blocks) {
+    const key = block.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(block);
+    }
+  }
+  
   return deduped.join("\n\n");
 }
 
