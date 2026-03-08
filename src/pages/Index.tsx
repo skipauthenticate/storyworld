@@ -11,6 +11,7 @@ import { useReadingProgress } from "@/hooks/useReadingProgress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Brain } from "lucide-react";
+import { ThemeToggle } from "@/components/storyworld/ThemeToggle";
 
 type ReadingMode = "classic" | "narrated" | "immersive";
 
