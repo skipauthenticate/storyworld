@@ -11,7 +11,7 @@ import { useReadingProgress } from "@/hooks/useReadingProgress";
 import { useAutoResearch } from "@/hooks/useAutoResearch";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Brain } from "lucide-react";
+import { Zap } from "lucide-react";
 import { ThemeToggle } from "@/components/storyworld/ThemeToggle";
 
 const Index = () => {
