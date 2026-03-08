@@ -5,7 +5,7 @@ import { Sentence } from '@/data/sampleBooks';
 interface UseNarrationOptions {
   sentences: Sentence[];
   speed: number;
-  readingMode: 'classic' | 'narrated' | 'immersive';
+  voiceEnabled: boolean;
 }
 
 interface UseNarrationReturn {
@@ -21,7 +21,7 @@ interface UseNarrationReturn {
   reset: () => void;
 }
 
-export function useNarration({ sentences, speed: initialSpeed, readingMode }: UseNarrationOptions): UseNarrationReturn {
+export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: UseNarrationOptions): UseNarrationReturn {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(0);
   const [ttsEngine, setTtsEngine] = useState<TTSEngine>('none');
@@ -31,16 +31,9 @@ export function useNarration({ sentences, speed: initialSpeed, readingMode }: Us
   const indexRef = useRef(0);
   const sentencesRef = useRef(sentences);
 
-  // Keep refs in sync
-  useEffect(() => {
-    playingRef.current = isPlaying;
-  }, [isPlaying]);
-  useEffect(() => {
-    indexRef.current = activeSentenceIndex;
-  }, [activeSentenceIndex]);
-  useEffect(() => {
-    sentencesRef.current = sentences;
-  }, [sentences]);
+  useEffect(() => { playingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { indexRef.current = activeSentenceIndex; }, [activeSentenceIndex]);
+  useEffect(() => { sentencesRef.current = sentences; }, [sentences]);
 
   // Reset when sentences array identity changes (chapter switch)
   const prevSentencesRef = useRef(sentences);
@@ -64,10 +57,8 @@ export function useNarration({ sentences, speed: initialSpeed, readingMode }: Us
     });
   }, []);
 
-  // Speak current sentence and advance
   const speakCurrent = useCallback(async (idx: number) => {
     if (idx >= sentencesRef.current.length || !playingRef.current) return;
-
     const sentence = sentencesRef.current[idx];
     await speakSentence(sentence.text, {
       speed,
@@ -78,9 +69,7 @@ export function useNarration({ sentences, speed: initialSpeed, readingMode }: Us
           setActiveSentenceIndex(nextIdx);
           indexRef.current = nextIdx;
           setTimeout(() => {
-            if (playingRef.current) {
-              speakCurrent(nextIdx);
-            }
+            if (playingRef.current) speakCurrent(nextIdx);
           }, 200);
         } else {
           setIsPlaying(false);
@@ -91,8 +80,7 @@ export function useNarration({ sentences, speed: initialSpeed, readingMode }: Us
   }, [speed]);
 
   const togglePlay = useCallback(() => {
-    if (readingMode === 'classic') return;
-
+    if (!voiceEnabled) return;
     if (isPlaying) {
       setIsPlaying(false);
       playingRef.current = false;
@@ -102,16 +90,14 @@ export function useNarration({ sentences, speed: initialSpeed, readingMode }: Us
       playingRef.current = true;
       speakCurrent(indexRef.current);
     }
-  }, [isPlaying, readingMode, speakCurrent]);
+  }, [isPlaying, voiceEnabled, speakCurrent]);
 
   const goToNext = useCallback(() => {
     stopSpeaking();
     const next = Math.min(sentencesRef.current.length - 1, activeSentenceIndex + 1);
     setActiveSentenceIndex(next);
     indexRef.current = next;
-    if (playingRef.current) {
-      speakCurrent(next);
-    }
+    if (playingRef.current) speakCurrent(next);
   }, [activeSentenceIndex, speakCurrent]);
 
   const goToPrevious = useCallback(() => {
@@ -119,18 +105,14 @@ export function useNarration({ sentences, speed: initialSpeed, readingMode }: Us
     const prev = Math.max(0, activeSentenceIndex - 1);
     setActiveSentenceIndex(prev);
     indexRef.current = prev;
-    if (playingRef.current) {
-      speakCurrent(prev);
-    }
+    if (playingRef.current) speakCurrent(prev);
   }, [activeSentenceIndex, speakCurrent]);
 
   const goToSentence = useCallback((index: number) => {
     stopSpeaking();
     setActiveSentenceIndex(index);
     indexRef.current = index;
-    if (playingRef.current) {
-      speakCurrent(index);
-    }
+    if (playingRef.current) speakCurrent(index);
   }, [speakCurrent]);
 
   const reset = useCallback(() => {
@@ -141,21 +123,17 @@ export function useNarration({ sentences, speed: initialSpeed, readingMode }: Us
     indexRef.current = 0;
   }, []);
 
-  // Stop on mode change to classic
+  // Stop when voice is disabled
   useEffect(() => {
-    if (readingMode === 'classic' && isPlaying) {
+    if (!voiceEnabled && isPlaying) {
       setIsPlaying(false);
       playingRef.current = false;
       stopSpeaking();
     }
-  }, [readingMode, isPlaying]);
+  }, [voiceEnabled, isPlaying]);
 
-  // Stop on unmount
   useEffect(() => {
-    return () => {
-      stopSpeaking();
-      playingRef.current = false;
-    };
+    return () => { stopSpeaking(); playingRef.current = false; };
   }, []);
 
   return {

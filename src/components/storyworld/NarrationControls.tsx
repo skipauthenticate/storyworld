@@ -1,6 +1,7 @@
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2 } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2, Brain } from "lucide-react";
 import { TTSEngine } from "@/lib/tts-engine";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface NarrationControlsProps {
   isPlaying: boolean;
@@ -9,19 +10,17 @@ interface NarrationControlsProps {
   totalSentences: number;
   ttsEngine: TTSEngine;
   ttsLoading: boolean;
+  voiceEnabled: boolean;
+  intelligenceEnabled: boolean;
   onTogglePlay: () => void;
   onPrevious: () => void;
   onNext: () => void;
   onSpeedChange: (speed: number) => void;
+  onToggleVoice: () => void;
+  onToggleIntelligence: () => void;
 }
 
 const speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
-
-const engineLabels: Record<TTSEngine, string> = {
-  runanywhere: "Piper Neural TTS",
-  webspeech: "Web Speech API",
-  none: "No TTS",
-};
 
 export function NarrationControls({
   isPlaying,
@@ -30,21 +29,17 @@ export function NarrationControls({
   totalSentences,
   ttsEngine,
   ttsLoading,
+  voiceEnabled,
+  intelligenceEnabled,
   onTogglePlay,
   onPrevious,
   onNext,
   onSpeedChange,
+  onToggleVoice,
+  onToggleIntelligence,
 }: NarrationControlsProps) {
   const [muted, setMuted] = useState(false);
   const progress = totalSentences > 0 ? ((currentSentence + 1) / totalSentences) * 100 : 0;
-
-  const handleToggleMute = () => {
-    setMuted(!muted);
-    // Web Speech API volume control
-    if ('speechSynthesis' in window) {
-      // Volume applies to next utterance
-    }
-  };
 
   return (
     <div className="border-t border-border bg-card px-4 sm:px-6 py-3">
@@ -57,66 +52,82 @@ export function NarrationControls({
       </div>
 
       <div className="flex items-center justify-between">
-        {/* Left: sentence counter + engine indicator */}
-        <div className="flex items-center gap-2 sm:gap-3 w-24 sm:w-40">
-          <span className="text-[10px] font-mono text-muted-foreground">
-            {currentSentence + 1} / {totalSentences}
-          </span>
-          <span className="text-[9px] font-mono text-muted-foreground/60 items-center gap-1 hidden sm:flex">
-            {ttsLoading ? (
-              <>
-                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              <>
-                <span className={ttsEngine === 'runanywhere' ? 'text-secondary' : 'text-muted-foreground/60'}>●</span>
-                {engineLabels[ttsEngine]}
-              </>
+        {/* Left: feature toggles */}
+        <div className="flex items-center gap-1.5 w-24 sm:w-40">
+          <button
+            onClick={onToggleVoice}
+            className={cn(
+              "p-1.5 rounded-md transition-colors text-[10px] font-mono flex items-center gap-1",
+              voiceEnabled
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground"
             )}
-          </span>
+            title="Toggle voice narration"
+          >
+            {voiceEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">Voice</span>
+          </button>
+          <button
+            onClick={onToggleIntelligence}
+            className={cn(
+              "p-1.5 rounded-md transition-colors text-[10px] font-mono flex items-center gap-1",
+              intelligenceEnabled
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            title="Toggle intelligence panel"
+          >
+            <Brain className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Intel</span>
+          </button>
         </div>
 
         {/* Center: playback controls */}
         <div className="flex items-center gap-3">
           <button
             onClick={onPrevious}
-            className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+            disabled={!voiceEnabled}
+            className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
           >
             <SkipBack className="w-4 h-4" />
           </button>
           <button
             onClick={onTogglePlay}
-            disabled={ttsLoading || ttsEngine === 'none'}
-            className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            disabled={!voiceEnabled || ttsLoading || ttsEngine === 'none'}
+            className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30"
           >
-            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+            {ttsLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : isPlaying ? (
+              <Pause className="w-4 h-4" />
+            ) : (
+              <Play className="w-4 h-4 ml-0.5" />
+            )}
           </button>
           <button
             onClick={onNext}
-            className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+            disabled={!voiceEnabled}
+            className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
           >
             <SkipForward className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Right: speed + volume */}
+        {/* Right: speed + sentence counter */}
         <div className="flex items-center gap-2 w-24 sm:w-40 justify-end">
+          <span className="text-[10px] font-mono text-muted-foreground">
+            {currentSentence + 1}/{totalSentences}
+          </span>
           <button
             onClick={() => {
               const currentIdx = speeds.indexOf(speed);
               const nextIdx = (currentIdx + 1) % speeds.length;
               onSpeedChange(speeds[nextIdx]);
             }}
-            className="text-[11px] font-mono text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border transition-colors"
+            disabled={!voiceEnabled}
+            className="text-[11px] font-mono text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border transition-colors disabled:opacity-30"
           >
             {speed}x
-          </button>
-          <button
-            onClick={handleToggleMute}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>

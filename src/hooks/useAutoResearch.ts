@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { sampleBooks } from "@/data/sampleBooks";
 
@@ -19,10 +19,13 @@ export interface Experiment {
   created_at: string;
 }
 
+const DEBOUNCE_MS = 60_000; // 60 seconds between auto-triggers
+
 export function useAutoResearch() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastTriggerRef = useRef<number>(0);
 
   const fetchExperiments = useCallback(async () => {
     const { data, error: err } = await supabase
@@ -44,7 +47,6 @@ export function useAutoResearch() {
     setError(null);
 
     try {
-      // Get current book data (Gatsby)
       const gatsby = sampleBooks.find((b) => b.id === "gatsby");
       if (!gatsby) throw new Error("No book data");
 
@@ -70,7 +72,6 @@ export function useAutoResearch() {
         ),
       };
 
-      // Get recent experiment history for context
       const recentExperiments = experiments.slice(0, 10).map((e) => ({
         domain: e.domain,
         description: e.description,
@@ -89,7 +90,6 @@ export function useAutoResearch() {
       if (fnErr) throw new Error(fnErr.message || "Edge function error");
       if (data?.error) throw new Error(data.error);
 
-      // Prepend new experiment
       if (data?.id) {
         setExperiments((prev) => [data as unknown as Experiment, ...prev]);
       }
@@ -102,10 +102,18 @@ export function useAutoResearch() {
     }
   }, [isRunning, experiments]);
 
+  // Debounced trigger for background auto-improvement
+  const triggerImprovement = useCallback((domain?: string) => {
+    const now = Date.now();
+    if (now - lastTriggerRef.current < DEBOUNCE_MS) return;
+    if (isRunning) return;
+    lastTriggerRef.current = now;
+    runExperiment(domain);
+  }, [isRunning, runExperiment]);
+
   const runLoop = useCallback(async (count: number = 3, domain?: string) => {
     for (let i = 0; i < count; i++) {
       await runExperiment(domain);
-      // Small delay between runs
       await new Promise((r) => setTimeout(r, 1000));
     }
   }, [runExperiment]);
@@ -117,5 +125,6 @@ export function useAutoResearch() {
     fetchExperiments,
     runExperiment,
     runLoop,
+    triggerImprovement,
   };
 }

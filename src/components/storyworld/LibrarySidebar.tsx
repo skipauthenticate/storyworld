@@ -3,37 +3,25 @@ import { BookOpen, ChevronRight, Users, Sparkles, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
-
-type ReadingMode = "classic" | "narrated" | "immersive";
 
 interface LibrarySidebarProps {
   books: Book[];
   activeBook: Book | null;
   activeChapterId: string | null;
-  readingMode: ReadingMode;
   onSelectBook: (book: Book) => void;
   onSelectChapter: (chapter: Chapter) => void;
-  onSetMode: (mode: ReadingMode) => void;
   onShowCharacters: () => void;
   onShowThemes?: () => void;
 }
-
-const modeConfig = {
-  classic: { label: "Classic", description: "Pure text", icon: "📖" },
-  narrated: { label: "Narrated", description: "Text + Voice", icon: "🎧" },
-  immersive: { label: "Immersive", description: "Text + Voice + AI", icon: "✨" },
-};
 
 function SidebarContent({
   books,
   activeBook,
   activeChapterId,
-  readingMode,
   onSelectBook,
   onSelectChapter,
-  onSetMode,
   onShowCharacters,
   onShowThemes,
   onItemClick,
@@ -50,33 +38,6 @@ function SidebarContent({
         <p className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground mt-0.5">
           Where text comes alive
         </p>
-      </div>
-
-      {/* Mode Selector */}
-      <div className="px-3 py-3 border-b border-border">
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-1">
-          Reading Mode
-        </p>
-        <div className="space-y-1">
-          {(Object.keys(modeConfig) as ReadingMode[]).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => { onSetMode(mode); }}
-              className={cn(
-                "w-full flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors text-sm",
-                readingMode === mode
-                  ? "bg-primary/10 text-primary"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent"
-              )}
-            >
-              <span className="text-base">{modeConfig[mode].icon}</span>
-              <div>
-                <div className="font-medium text-[13px]">{modeConfig[mode].label}</div>
-                <div className="text-[10px] text-muted-foreground">{modeConfig[mode].description}</div>
-              </div>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Library */}
