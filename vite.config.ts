@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { viteStaticCopy } from "vite-plugin-static-copy";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -16,7 +17,18 @@ export default defineConfig(({ mode }) => ({
       'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    mode === "development" && componentTagger(),
+    viteStaticCopy({
+      targets: [
+        {
+          src: 'node_modules/@runanywhere/web-onnx/wasm/sherpa/*',
+          dest: 'assets',
+        },
+      ],
+    }),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
