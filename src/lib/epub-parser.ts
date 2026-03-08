@@ -62,32 +62,49 @@ function classifySentence(text: string): Sentence["type"] {
 
 /**
  * Extract text content from XHTML/HTML string
+/**
+ * Extract text content from XHTML/HTML string.
+ * Only selects leaf-level block elements to prevent nested duplication.
  */
 function extractText(html: string): string {
   const div = document.createElement("div");
   div.innerHTML = html;
   
-  // Remove script and style elements
-  div.querySelectorAll("script, style").forEach((el) => el.remove());
+  // Remove non-content elements
+  div.querySelectorAll("script, style, nav, header, footer").forEach((el) => el.remove());
   
-  // Get text with paragraph breaks preserved (avoid nested block duplication)
+  const BLOCK_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "LI", "BLOCKQUOTE", "PRE", "FIGCAPTION"]);
+  
+  // Walk the DOM and collect only leaf-level block elements
+  // (blocks that don't contain other blocks)
   const blocks: string[] = [];
-  div.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li, blockquote").forEach((el) => {
+  const allBlocks = div.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, figcaption");
+  
+  allBlocks.forEach((el) => {
+    // Skip if this element contains another block element (not a leaf)
+    const hasNestedBlock = Array.from(el.children).some((child) => BLOCK_TAGS.has(child.tagName));
+    if (hasNestedBlock) return;
+    
     const t = (el as HTMLElement).innerText?.replace(/\s+/g, " ").trim();
-    if (t) blocks.push(t);
+    if (t && t.length > 1) blocks.push(t);
   });
-
-  // If no block elements found, fall back to full innerText
+  
+  // Fallback: if no blocks found, use full innerText
   if (blocks.length === 0) {
     return (div as HTMLElement).innerText?.trim() ?? "";
   }
-
-  // De-duplicate repeated blocks (common in some EPUB DOM structures)
-  const deduped = blocks.filter((block, idx) => {
-    const normalized = block.toLowerCase();
-    return idx === 0 || normalized !== blocks[idx - 1].toLowerCase();
-  });
-
+  
+  // Global de-duplication (not just adjacent) — handles repeated DOM structures
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const block of blocks) {
+    const key = block.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(block);
+    }
+  }
+  
   return deduped.join("\n\n");
 }
 
@@ -159,34 +176,50 @@ export async function parseEpub(file: File): Promise<Book> {
         /^\s*(cover|title\s+page|copyright|dedication)\s*$/im.test(textLower)
       );
 
-      const legalPattern = /copyright\s*©|all\s+rights?\s+reserved|rights?\s+(of|to)\s+.*reproduc|this\s+publication\s+is\s+protected|non-exclusive|non-transferable|epubbooks|www\./i;
-      const legalHitCount = (textLower.match(/copyright|all\s+rights?\s+reserved|non-transferable|publication\s+is\s+protected|epubbooks|www\./g) ?? []).length;
-      const hasCopyrightContent = legalPattern.test(textLower);
-      const startsWithLegal = legalPattern.test(textLower.slice(0, 1500));
-
-      // Remove duplicated / legal front-matter paragraphs before chapter parsing
+      // Generic legal/boilerplate detection — not tied to any publisher
+      const legalSignals = [
+        /copyright\s*[©(]/i,
+        /all\s+rights?\s+reserved/i,
+        /this\s+(publication|book|ebook|work)\s+is\s+(protected|subject)/i,
+        /no\s+part\s+of\s+this\s+(book|publication|text|work)/i,
+        /without\s+(the\s+)?(prior\s+)?(written\s+)?permission/i,
+        /non-exclusive|non-transferable/i,
+        /reproduced|transmitted|downloaded|decompiled/i,
+        /isbn\s*[-:]?\s*[\d-]{10,}/i,
+        /published\s+by|printed\s+in|first\s+(published|edition|printing)/i,
+      ];
+      const legalHits = legalSignals.filter((rx) => rx.test(textLower)).length;
+      
+      // Split into paragraphs and de-dup
       const rawParagraphs = text
         .split(/\n\n+/)
         .map((p) => p.replace(/\s+/g, " ").trim())
-        .filter(Boolean);
+        .filter((p) => p.length > 1);
 
-      const uniqueParagraphs = rawParagraphs.filter((p, idx) => {
-        const normalized = p.toLowerCase();
-        return idx === rawParagraphs.findIndex((x) => x.toLowerCase() === normalized);
+      const seen = new Set<string>();
+      const uniqueParagraphs = rawParagraphs.filter((p) => {
+        const key = p.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
 
-      const contentParagraphs = uniqueParagraphs.filter((p) => !legalPattern.test(p.toLowerCase()));
+      // Remove paragraphs that are purely legal boilerplate
+      const isLegalParagraph = (p: string) => {
+        const lower = p.toLowerCase();
+        const hits = legalSignals.filter((rx) => rx.test(lower)).length;
+        return hits >= 2 || (hits >= 1 && p.length < 200);
+      };
+      const contentParagraphs = uniqueParagraphs.filter((p) => !isLegalParagraph(p));
       const cleanText = contentParagraphs.join("\n\n").trim();
 
-      // Detect title pages: short sections where book title + author appear, but no narrative
-      const isTitlePage = text.length < 1500 &&
-        textLower.includes(title.toLowerCase()) &&
-        textLower.includes(author.toLowerCase()) &&
-        cleanText.length < 400;
+      // Skip pages that are predominantly legal/boilerplate
+      const isCopyrightPage = legalHits >= 3 || (legalHits >= 2 && cleanText.length < 500);
 
-      // Detect pure legal pages, including long duplicated ones
-      const isCopyrightPage = (hasCopyrightContent && legalHitCount >= 2 && cleanText.length < 600) ||
-        (startsWithLegal && legalHitCount >= 4 && cleanText.length < 1500);
+      // Skip title pages: short sections with book title + author and little else
+      const isTitlePage = cleanText.length < 500 &&
+        textLower.includes(title.toLowerCase()) &&
+        textLower.includes(author.toLowerCase());
 
       if (isTocPage || isFrontMatter || isNavContent || isCopyrightPage || isTitlePage) continue;
       if (!cleanText || cleanText.length < 80) continue;
