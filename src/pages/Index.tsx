@@ -231,6 +231,7 @@ const Index = () => {
       )}
 
       <KeyboardHints />
+      <ThemeToggle />
     </div>
   );
 };
