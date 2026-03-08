@@ -38,7 +38,10 @@ export async function initTTS(): Promise<TTSEngine> {
     // Try RunAnywhere first
     try {
       const { RunAnywhere, SDKEnvironment } = await import('@runanywhere/web');
-      const { ONNX, TTS } = await import('@runanywhere/web-onnx');
+      const { ONNX, TTS, SherpaONNXBridge } = await import('@runanywhere/web-onnx');
+
+      // Point the bridge to the correct WASM location (copied by vite-plugin-static-copy)
+      SherpaONNXBridge.shared.wasmUrl = new URL('/assets/sherpa-onnx-glue.js', window.location.origin).href;
 
       await RunAnywhere.initialize({
         environment: SDKEnvironment.Development,
