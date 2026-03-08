@@ -3,7 +3,7 @@
  * 
  * Uses RunAnywhere Web SDK (Piper TTS via sherpa-onnx WASM) for on-device 
  * neural voice synthesis. Falls back to Web Speech API when RunAnywhere 
- * is unavailable (e.g., iframe environments without proper COOP/COEP headers).
+ * is unavailable.
  */
 
 export type TTSEngine = 'runanywhere' | 'webspeech' | 'none';
@@ -24,7 +24,10 @@ let ttsState: TTSState = {
 
 let initPromise: Promise<TTSEngine> | null = null;
 
-const VOICE_MODEL_BASE = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main';
+const VOICE_MODEL_URL = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main/en_US-lessac-medium.onnx';
+const TOKENS_URL = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main/tokens.txt';
+
+const TTS_MODEL_ID = 'piper-en-lessac-medium';
 
 /**
  * Initialize TTS engine. Tries RunAnywhere first, falls back to Web Speech API.
@@ -37,7 +40,7 @@ export async function initTTS(): Promise<TTSEngine> {
 
     // Try RunAnywhere first
     try {
-      const { RunAnywhere, SDKEnvironment } = await import('@runanywhere/web');
+      const { RunAnywhere, SDKEnvironment, ModelManager, ModelCategory, ModelStatus } = await import('@runanywhere/web');
       const { ONNX, TTS, SherpaONNXBridge } = await import('@runanywhere/web-onnx');
 
       // Point the bridge to the correct WASM location (copied by vite-plugin-static-copy)
@@ -45,17 +48,37 @@ export async function initTTS(): Promise<TTSEngine> {
 
       await RunAnywhere.initialize({
         environment: SDKEnvironment.Development,
-        debug: false,
+        debug: true,
       });
 
       await ONNX.register();
 
-      await TTS.loadVoice({
-        voiceId: 'piper-en-lessac',
-        modelPath: `${VOICE_MODEL_BASE}/en_US-lessac-medium.onnx`,
-        tokensPath: `${VOICE_MODEL_BASE}/tokens.txt`,
-        dataDir: `${VOICE_MODEL_BASE}/espeak-ng-data`,
-      });
+      // Register the TTS model in the catalog
+      ModelManager.registerModels([{
+        id: TTS_MODEL_ID,
+        name: 'Piper EN US Lessac Medium',
+        url: VOICE_MODEL_URL,
+        modality: ModelCategory.SpeechSynthesis,
+        isArchive: false,
+        additionalFiles: [
+          { filename: 'tokens.txt', url: TOKENS_URL },
+        ],
+      }]);
+
+      // Check if already downloaded
+      const models = ModelManager.getModels();
+      const ttsModel = models.find((m: any) => m.id === TTS_MODEL_ID);
+      
+      if (!ttsModel || ttsModel.status === ModelStatus.Registered) {
+        console.log('[STORYWORLD] Downloading TTS model...');
+        await ModelManager.downloadModel(TTS_MODEL_ID);
+        console.log('[STORYWORLD] TTS model downloaded');
+      }
+
+      // Load the model (this writes to WASM FS and calls TTS.loadVoice)
+      console.log('[STORYWORLD] Loading TTS model...');
+      await ModelManager.loadModel(TTS_MODEL_ID, { coexist: true });
+      console.log('[STORYWORLD] TTS model loaded');
 
       ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
       console.log('[STORYWORLD] RunAnywhere TTS initialized (Piper neural voice)');
