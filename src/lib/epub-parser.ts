@@ -169,8 +169,20 @@ export async function parseEpub(file: File): Promise<Book> {
       );
       const chapterTitle = tocEntry?.label?.trim() || `Chapter ${chapters.length + 1}`;
       
+      // Strip leading copyright/legal paragraphs from content
+      let cleanText = text;
+      if (hasCopyrightContent) {
+        const paragraphs = cleanText.split(/\n\n+/);
+        const firstNonLegal = paragraphs.findIndex(
+          (p) => !/copyright\s*©|all\s+rights?\s+reserved|rights?\s+(of|to)\s+.*reproduc|this\s+publication\s+is\s+protected|non-exclusive|non-transferable|epubbooks|www\./i.test(p)
+        );
+        if (firstNonLegal > 0) {
+          cleanText = paragraphs.slice(firstNonLegal).join("\n\n");
+        }
+      }
+
       // Split into sentences
-      const sentenceTexts = splitIntoSentences(text);
+      const sentenceTexts = splitIntoSentences(cleanText);
       if (sentenceTexts.length === 0) continue;
       
       const sentences: Sentence[] = sentenceTexts.map((s, sIdx) => ({
