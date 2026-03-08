@@ -1,8 +1,8 @@
 import { Book, Chapter } from "@/data/sampleBooks";
-import { BookOpen, ChevronRight, Menu } from "lucide-react";
+import { BookOpen, ChevronRight, Menu, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -12,6 +12,8 @@ interface LibrarySidebarProps {
   activeChapterId: string | null;
   onSelectBook: (book: Book) => void;
   onSelectChapter: (chapter: Chapter) => void;
+  onImportEpub: (file: File) => void;
+  importing: boolean;
 }
 
 function SidebarContent({
@@ -20,9 +22,12 @@ function SidebarContent({
   activeChapterId,
   onSelectBook,
   onSelectChapter,
+  onImportEpub,
+  importing,
   onItemClick,
 }: LibrarySidebarProps & { onItemClick?: () => void }) {
   const [expandedBook, setExpandedBook] = useState<string | null>(activeBook?.id ?? null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -38,9 +43,33 @@ function SidebarContent({
 
       {/* Library */}
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Book library">
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-2 px-1">
-          Library
-        </p>
+        <div className="flex items-center justify-between px-1 mb-2">
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+            Library
+          </p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".epub"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && file.name.toLowerCase().endsWith(".epub")) {
+                onImportEpub(file);
+              }
+              e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={importing}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-30"
+            title="Import EPUB"
+            aria-label="Import EPUB file"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
         <div className="space-y-1">
           {books.map((book) => (
             <div key={book.id}>

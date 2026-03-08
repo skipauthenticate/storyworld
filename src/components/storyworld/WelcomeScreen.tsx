@@ -1,14 +1,25 @@
 import { Book } from "@/data/sampleBooks";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 
 interface WelcomeScreenProps {
   books: Book[];
   onSelectBook: (book: Book) => void;
+  onImportEpub: (file: File) => void;
+  importing: boolean;
 }
 
-export function WelcomeScreen({ books, onSelectBook }: WelcomeScreenProps) {
+export function WelcomeScreen({ books, onSelectBook, onImportEpub, importing }: WelcomeScreenProps) {
   const availableBooks = books.filter(b => b.chapters.length > 0);
   const comingSoon = books.filter(b => b.chapters.length === 0);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleFile = (file: File) => {
+    if (file.name.toLowerCase().endsWith(".epub")) {
+      onImportEpub(file);
+    }
+  };
 
   return (
     <div className="flex-1 flex items-center justify-center px-4">
@@ -18,7 +29,7 @@ export function WelcomeScreen({ books, onSelectBook }: WelcomeScreenProps) {
         </h2>
         <p className="text-muted-foreground text-[14px] sm:text-[15px] leading-relaxed mb-10">
           Where text comes alive. Select a book from your library to begin reading,
-          or explore the sample library.
+          or import an EPUB file.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -62,9 +73,41 @@ export function WelcomeScreen({ books, onSelectBook }: WelcomeScreenProps) {
           ))}
         </div>
 
-        <p className="text-muted-foreground/40 text-[11px] font-mono">
-          EPUB &amp; PDF import — coming soon
-        </p>
+        {/* EPUB Import */}
+        <div
+          className={`relative border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer ${
+            dragOver
+              ? "border-primary bg-primary/5"
+              : "border-border hover:border-muted-foreground/50"
+          }`}
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+          }}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".epub"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+              e.target.value = "";
+            }}
+          />
+          <div className="flex flex-col items-center gap-2">
+            <Upload className="w-5 h-5 text-muted-foreground" />
+            <p className="text-[13px] text-muted-foreground">
+              {importing ? "Parsing EPUB…" : "Drop an EPUB here or click to import"}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
