@@ -1,9 +1,10 @@
 import { Sentence, Book } from "@/data/sampleBooks";
-import { X, BookOpen, MessageSquare, Sparkles, User, Send, Loader2, Download, Brain } from "lucide-react";
+import { X, BookOpen, MessageSquare, Sparkles, User, Send, Loader2, Download, Brain, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 import { useLLMChat } from "@/hooks/useLLMChat";
+import { ResearchPanel } from "./ResearchPanel";
 
 interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
@@ -26,7 +27,7 @@ export function IntelligencePanel({
   onCloseThemes,
   className,
 }: IntelligencePanelProps) {
-  const [activeTab, setActiveTab] = useState<"annotation" | "characters" | "themes" | "chat">("annotation");
+  const [activeTab, setActiveTab] = useState<"annotation" | "characters" | "themes" | "chat" | "research">("annotation");
 
   useEffect(() => {
     if (showCharacters) setActiveTab("characters");
@@ -41,6 +42,7 @@ export function IntelligencePanel({
     { id: "characters" as const, label: "Characters", icon: User },
     { id: "themes" as const, label: "Themes", icon: Sparkles },
     { id: "chat" as const, label: "AI Chat", icon: Brain },
+    { id: "research" as const, label: "Research", icon: FlaskConical },
   ];
 
   return (
@@ -88,6 +90,9 @@ export function IntelligencePanel({
           )}
           {activeTab === "chat" && (
             <ChatTab key="chat" book={book} selectedSentence={selectedSentence} />
+          )}
+          {activeTab === "research" && (
+            <ResearchPanel key="research" />
           )}
         </AnimatePresence>
       </div>
