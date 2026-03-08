@@ -1,6 +1,5 @@
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Loader2, Brain } from "lucide-react";
 import { TTSEngine } from "@/lib/tts-engine";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface NarrationControlsProps {
@@ -38,13 +37,12 @@ export function NarrationControls({
   onToggleVoice,
   onToggleIntelligence,
 }: NarrationControlsProps) {
-  const [muted, setMuted] = useState(false);
   const progress = totalSentences > 0 ? ((currentSentence + 1) / totalSentences) * 100 : 0;
 
   return (
-    <div className="border-t border-border bg-card px-4 sm:px-6 py-3">
+    <div className="border-t border-border bg-card px-4 sm:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
       {/* Progress bar */}
-      <div className="w-full h-0.5 bg-muted rounded-full mb-3 overflow-hidden">
+      <div className="w-full h-0.5 bg-muted rounded-full mb-3 overflow-hidden" role="progressbar" aria-valuenow={currentSentence + 1} aria-valuemax={totalSentences}>
         <div
           className="h-full bg-primary rounded-full transition-all duration-500"
           style={{ width: `${progress}%` }}
@@ -63,6 +61,8 @@ export function NarrationControls({
                 : "text-muted-foreground hover:text-foreground"
             )}
             title="Toggle voice narration"
+            aria-label={voiceEnabled ? "Disable voice narration" : "Enable voice narration"}
+            aria-pressed={voiceEnabled}
           >
             {voiceEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">Voice</span>
@@ -76,6 +76,8 @@ export function NarrationControls({
                 : "text-muted-foreground hover:text-foreground"
             )}
             title="Toggle intelligence panel"
+            aria-label={intelligenceEnabled ? "Hide intelligence panel" : "Show intelligence panel"}
+            aria-pressed={intelligenceEnabled}
           >
             <Brain className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Intel</span>
@@ -83,11 +85,12 @@ export function NarrationControls({
         </div>
 
         {/* Center: playback controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" role="group" aria-label="Playback controls">
           <button
             onClick={onPrevious}
             disabled={!voiceEnabled}
             className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+            aria-label="Previous sentence"
           >
             <SkipBack className="w-4 h-4" />
           </button>
@@ -95,6 +98,7 @@ export function NarrationControls({
             onClick={onTogglePlay}
             disabled={!voiceEnabled || ttsLoading || ttsEngine === 'none'}
             className="p-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-30"
+            aria-label={isPlaying ? "Pause narration" : "Play narration"}
           >
             {ttsLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -108,6 +112,7 @@ export function NarrationControls({
             onClick={onNext}
             disabled={!voiceEnabled}
             className="p-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+            aria-label="Next sentence"
           >
             <SkipForward className="w-4 h-4" />
           </button>
@@ -115,7 +120,7 @@ export function NarrationControls({
 
         {/* Right: speed + sentence counter */}
         <div className="flex items-center gap-2 w-24 sm:w-40 justify-end">
-          <span className="text-[10px] font-mono text-muted-foreground">
+          <span className="text-[10px] font-mono text-muted-foreground" aria-label={`Sentence ${currentSentence + 1} of ${totalSentences}`}>
             {currentSentence + 1}/{totalSentences}
           </span>
           <button
@@ -126,6 +131,7 @@ export function NarrationControls({
             }}
             disabled={!voiceEnabled}
             className="text-[11px] font-mono text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border transition-colors disabled:opacity-30"
+            aria-label={`Playback speed ${speed}x. Click to change.`}
           >
             {speed}x
           </button>
