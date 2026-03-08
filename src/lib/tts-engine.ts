@@ -23,15 +23,9 @@ let ttsState: TTSState = {
 
 let initPromise: Promise<TTSEngine> | null = null;
 
-const VOICE_MODEL_BASE = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main';
-const VOICE_ID = 'piper-en-lessac';
+// RunAnywhere's pre-packaged tar.gz includes: model.onnx + tokens.txt + espeak-ng-data/
+const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz';
 const MODEL_DIR = '/models/piper-en-lessac';
-
-async function fetchBinary(url: string): Promise<Uint8Array> {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Failed to fetch ${url}: ${resp.status}`);
-  return new Uint8Array(await resp.arrayBuffer());
-}
 
 /**
  * Initialize TTS engine. Tries RunAnywhere first, falls back to Web Speech API.
@@ -43,7 +37,7 @@ export async function initTTS(): Promise<TTSEngine> {
     ttsState.loading = true;
 
     try {
-      const { RunAnywhere, SDKEnvironment } = await import('@runanywhere/web');
+      const { RunAnywhere, SDKEnvironment, extractTarGz } = await import('@runanywhere/web');
       const { ONNX, TTS, SherpaONNXBridge } = await import('@runanywhere/web-onnx');
 
       // Set WASM location (copied by vite-plugin-static-copy)
@@ -56,35 +50,66 @@ export async function initTTS(): Promise<TTSEngine> {
         await ONNX.register();
       }
 
-      // Ensure WASM module is loaded
+      // Ensure WASM is loaded
       const sherpa = SherpaONNXBridge.shared;
       await sherpa.ensureLoaded();
       console.log('[STORYWORLD] Sherpa-ONNX WASM loaded');
 
-      // Download model files and write them to the WASM virtual filesystem
-      console.log('[STORYWORLD] Downloading Piper TTS model files...');
-      const [modelData, tokensData] = await Promise.all([
-        fetchBinary(`${VOICE_MODEL_BASE}/en_US-lessac-medium.onnx`),
-        fetchBinary(`${VOICE_MODEL_BASE}/tokens.txt`),
-      ]);
-      console.log(`[STORYWORLD] Model: ${(modelData.byteLength / 1e6).toFixed(1)}MB, Tokens: ${(tokensData.byteLength / 1e3).toFixed(1)}KB`);
+      // Download the tar.gz archive
+      console.log('[STORYWORLD] Downloading Piper TTS archive (~75MB)...');
+      const response = await fetch(TTS_ARCHIVE_URL);
+      if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
+      const archiveData = new Uint8Array(await response.arrayBuffer());
+      console.log(`[STORYWORLD] Archive downloaded: ${(archiveData.byteLength / 1e6).toFixed(1)}MB`);
 
-      // Write files to sherpa-onnx virtual FS
-      sherpa.writeFile(`${MODEL_DIR}/model.onnx`, modelData);
-      sherpa.writeFile(`${MODEL_DIR}/tokens.txt`, tokensData);
-      console.log('[STORYWORLD] Model files written to WASM FS');
+      // Extract tar.gz
+      console.log('[STORYWORLD] Extracting archive...');
+      const entries = await extractTarGz(archiveData);
+      console.log(`[STORYWORLD] Extracted ${entries.length} files`);
 
-      // Load the voice via TTS extension
+      // Find the common prefix in the archive (e.g., "vits-piper-en_US-lessac-medium/")
+      const prefix = findPrefix(entries.map((e: any) => e.path));
+
+      // Write all files to WASM virtual FS
+      let modelPath = '';
+      let tokensPath = '';
+      let dataDirPath = '';
+
+      for (const entry of entries) {
+        const relativePath = prefix ? entry.path.slice(prefix.length) : entry.path;
+        if (!relativePath || relativePath.endsWith('/')) continue; // skip directories
+        
+        const fsPath = `${MODEL_DIR}/${relativePath}`;
+        sherpa.writeFile(fsPath, entry.data);
+
+        if (relativePath.endsWith('.onnx') && !relativePath.includes('/')) {
+          modelPath = fsPath;
+        }
+        if (relativePath === 'tokens.txt') {
+          tokensPath = fsPath;
+        }
+        if (relativePath.startsWith('espeak-ng-data/') && !dataDirPath) {
+          dataDirPath = `${MODEL_DIR}/espeak-ng-data`;
+        }
+      }
+
+      console.log(`[STORYWORLD] Model: ${modelPath}, Tokens: ${tokensPath}, DataDir: ${dataDirPath}`);
+
+      if (!modelPath) throw new Error('No .onnx model file found in archive');
+      if (!tokensPath) throw new Error('No tokens.txt found in archive');
+
+      // Load the voice
+      console.log('[STORYWORLD] Loading TTS voice...');
       await TTS.loadVoice({
-        voiceId: VOICE_ID,
-        modelPath: `${MODEL_DIR}/model.onnx`,
-        tokensPath: `${MODEL_DIR}/tokens.txt`,
-        dataDir: '',
+        voiceId: 'piper-en-lessac',
+        modelPath,
+        tokensPath,
+        dataDir: dataDirPath,
         numThreads: 1,
       });
 
       ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
-      console.log('[STORYWORLD] ✓ RunAnywhere Piper TTS ready');
+      console.log('[STORYWORLD] ✓ RunAnywhere Piper TTS ready (neural voice)');
       return 'runanywhere' as TTSEngine;
     } catch (err) {
       console.warn('[STORYWORLD] RunAnywhere TTS unavailable, falling back:', err);
@@ -110,6 +135,17 @@ export async function initTTS(): Promise<TTSEngine> {
   })();
 
   return initPromise;
+}
+
+/** Find common path prefix from archive entry paths */
+function findPrefix(paths: string[]): string {
+  if (paths.length === 0) return '';
+  const first = paths[0];
+  const slashIdx = first.indexOf('/');
+  if (slashIdx < 0) return '';
+  const candidate = first.slice(0, slashIdx + 1);
+  if (paths.every(p => p.startsWith(candidate))) return candidate;
+  return '';
 }
 
 export async function speakSentence(
