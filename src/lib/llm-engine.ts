@@ -158,8 +158,7 @@ export async function chatGenerate(
     });
 
     let fullText = '';
-    for await (const chunk of streamResult.tokens) {
-      const token = typeof chunk === 'string' ? chunk : (chunk as any).text || '';
+    for await (const token of streamResult.stream) {
       if (token) {
         fullText += token;
         onToken?.(token);
