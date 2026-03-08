@@ -23,9 +23,9 @@ let ttsState: TTSState = {
 
 let initPromise: Promise<TTSEngine> | null = null;
 
-// RunAnywhere's pre-packaged tar.gz that includes model + tokens + espeak-ng-data
+// RunAnywhere's pre-packaged tar.gz includes: model.onnx + tokens.txt + espeak-ng-data/
 const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz';
-const TTS_MODEL_ID = 'vits-piper-en_US-lessac-medium';
+const MODEL_DIR = '/models/piper-en-lessac';
 
 /**
  * Initialize TTS engine. Tries RunAnywhere first, falls back to Web Speech API.
@@ -37,7 +37,7 @@ export async function initTTS(): Promise<TTSEngine> {
     ttsState.loading = true;
 
     try {
-      const { RunAnywhere, SDKEnvironment, ModelManager, ModelCategory, ModelStatus } = await import('@runanywhere/web');
+      const { RunAnywhere, SDKEnvironment, extractTarGz } = await import('@runanywhere/web');
       const { ONNX, TTS, SherpaONNXBridge } = await import('@runanywhere/web-onnx');
 
       // Set WASM location (copied by vite-plugin-static-copy)
@@ -50,47 +50,63 @@ export async function initTTS(): Promise<TTSEngine> {
         await ONNX.register();
       }
 
-      // Register TTS model as a tar.gz archive (includes onnx + tokens + espeak-ng-data)
-      ModelManager.registerModels([{
-        id: TTS_MODEL_ID,
-        name: 'Piper TTS EN-US Lessac Medium',
-        url: TTS_ARCHIVE_URL,
-        modality: ModelCategory.SpeechSynthesis,
-        isArchive: true,
-      } as any]);
+      // Ensure WASM is loaded
+      const sherpa = SherpaONNXBridge.shared;
+      await sherpa.ensureLoaded();
+      console.log('[STORYWORLD] Sherpa-ONNX WASM loaded');
 
-      // Check current status
-      const models = ModelManager.getModels();
-      const model = models.find((m: any) => m.id === TTS_MODEL_ID);
-      console.log(`[STORYWORLD] TTS model status: ${model?.status}`);
+      // Download the tar.gz archive
+      console.log('[STORYWORLD] Downloading Piper TTS archive (~75MB)...');
+      const response = await fetch(TTS_ARCHIVE_URL);
+      if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
+      const archiveData = new Uint8Array(await response.arrayBuffer());
+      console.log(`[STORYWORLD] Archive downloaded: ${(archiveData.byteLength / 1e6).toFixed(1)}MB`);
 
-      // Download if not already downloaded
-      if (!model || model.status === ModelStatus.Registered) {
-        console.log('[STORYWORLD] Downloading Piper TTS archive (~65MB with espeak-ng-data)...');
-        await ModelManager.downloadModel(TTS_MODEL_ID);
-        console.log('[STORYWORLD] TTS archive downloaded');
-      } else if (model.status === ModelStatus.Loaded) {
-        // Already loaded from a previous session
-        ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
-        console.log('[STORYWORLD] ✓ Piper TTS already loaded');
-        return 'runanywhere' as TTSEngine;
-      } else {
-        console.log('[STORYWORLD] TTS model already downloaded');
-      }
+      // Extract tar.gz
+      console.log('[STORYWORLD] Extracting archive...');
+      const entries = await extractTarGz(archiveData);
+      console.log(`[STORYWORLD] Extracted ${entries.length} files`);
 
-      // Load the model (extracts tar.gz, writes to WASM FS, calls TTS.loadVoice)
-      console.log('[STORYWORLD] Loading TTS model (extracting archive → WASM FS)...');
-      const loaded = await ModelManager.loadModel(TTS_MODEL_ID, { coexist: true });
-      
-      if (!loaded) {
-        // Try force: re-download and load
-        console.warn('[STORYWORLD] loadModel returned false, retrying with fresh download...');
-        await ModelManager.downloadModel(TTS_MODEL_ID);
-        const retryLoaded = await ModelManager.loadModel(TTS_MODEL_ID, { coexist: true });
-        if (!retryLoaded) {
-          throw new Error('ModelManager.loadModel failed after retry');
+      // Find the common prefix in the archive (e.g., "vits-piper-en_US-lessac-medium/")
+      const prefix = findPrefix(entries.map((e: any) => e.path));
+
+      // Write all files to WASM virtual FS
+      let modelPath = '';
+      let tokensPath = '';
+      let dataDirPath = '';
+
+      for (const entry of entries) {
+        const relativePath = prefix ? entry.path.slice(prefix.length) : entry.path;
+        if (!relativePath || relativePath.endsWith('/')) continue; // skip directories
+        
+        const fsPath = `${MODEL_DIR}/${relativePath}`;
+        sherpa.writeFile(fsPath, entry.data);
+
+        if (relativePath.endsWith('.onnx') && !relativePath.includes('/')) {
+          modelPath = fsPath;
+        }
+        if (relativePath === 'tokens.txt') {
+          tokensPath = fsPath;
+        }
+        if (relativePath.startsWith('espeak-ng-data/') && !dataDirPath) {
+          dataDirPath = `${MODEL_DIR}/espeak-ng-data`;
         }
       }
+
+      console.log(`[STORYWORLD] Model: ${modelPath}, Tokens: ${tokensPath}, DataDir: ${dataDirPath}`);
+
+      if (!modelPath) throw new Error('No .onnx model file found in archive');
+      if (!tokensPath) throw new Error('No tokens.txt found in archive');
+
+      // Load the voice
+      console.log('[STORYWORLD] Loading TTS voice...');
+      await TTS.loadVoice({
+        voiceId: 'piper-en-lessac',
+        modelPath,
+        tokensPath,
+        dataDir: dataDirPath,
+        numThreads: 1,
+      });
 
       ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
       console.log('[STORYWORLD] ✓ RunAnywhere Piper TTS ready (neural voice)');
@@ -119,6 +135,17 @@ export async function initTTS(): Promise<TTSEngine> {
   })();
 
   return initPromise;
+}
+
+/** Find common path prefix from archive entry paths */
+function findPrefix(paths: string[]): string {
+  if (paths.length === 0) return '';
+  const first = paths[0];
+  const slashIdx = first.indexOf('/');
+  if (slashIdx < 0) return '';
+  const candidate = first.slice(0, slashIdx + 1);
+  if (paths.every(p => p.startsWith(candidate))) return candidate;
+  return '';
 }
 
 export async function speakSentence(
