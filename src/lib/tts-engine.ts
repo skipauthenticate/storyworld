@@ -27,6 +27,11 @@ let initPromise: Promise<TTSEngine> | null = null;
 const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz';
 const MODEL_DIR = '/models/piper-en-lessac';
 
+function getProxyUrl(url: string): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  return `${supabaseUrl}/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
+}
+
 /**
  * Initialize TTS engine. Tries RunAnywhere first, falls back to Web Speech API.
  */
@@ -57,7 +62,7 @@ export async function initTTS(): Promise<TTSEngine> {
 
       // Download the tar.gz archive
       console.log('[STORYWORLD] Downloading Piper TTS archive (~75MB)...');
-      const response = await fetch(TTS_ARCHIVE_URL);
+      const response = await fetch(getProxyUrl(TTS_ARCHIVE_URL));
       if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
       const archiveData = new Uint8Array(await response.arrayBuffer());
       console.log(`[STORYWORLD] Archive downloaded: ${(archiveData.byteLength / 1e6).toFixed(1)}MB`);

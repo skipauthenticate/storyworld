@@ -35,6 +35,11 @@ const MODEL_URL = 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolv
 const MODEL_ID = 'qwen2.5-0.5b';
 const MODEL_FS_PATH = '/models/qwen2.5-0.5b-instruct-q4_0.gguf';
 
+function getProxyUrl(url: string): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  return `${supabaseUrl}/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
+}
+
 /**
  * Initialize the on-device LLM. Downloads ~350MB model on first use.
  */
@@ -67,7 +72,7 @@ export async function initLLM(): Promise<boolean> {
       updateState({ status: 'downloading', progress: 0 });
       console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B (~350MB)...');
 
-      const response = await fetch(MODEL_URL);
+      const response = await fetch(getProxyUrl(MODEL_URL));
       if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
 
       const contentLength = Number(response.headers.get('content-length') || 0);
