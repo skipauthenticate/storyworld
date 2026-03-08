@@ -13,6 +13,33 @@ const ALLOWED_HOSTS = [
   'cdn-lfs.hf.co',
 ];
 
+const CDN_HOSTS = [
+  'github-releases.githubusercontent.com',
+  'github-cloud.githubusercontent.com',
+  'github-cloud.s3.amazonaws.com',
+];
+
+// Simple in-memory rate limiter: max 30 requests per minute per IP
+const rateLimitMap = new Map<string, { count: number; reset: number }>();
+const RATE_LIMIT = 30;
+const RATE_WINDOW_MS = 60_000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.reset) {
+    rateLimitMap.set(ip, { count: 1, reset: now + RATE_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
+function isAllowedHost(hostname: string): boolean {
+  return [...ALLOWED_HOSTS, ...CDN_HOSTS].some(h => hostname === h || hostname.endsWith('.' + h));
+}
+
 function isAllowedUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString);
@@ -30,6 +57,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Rate limiting
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!checkRateLimit(clientIp)) {
+    return new Response(JSON.stringify({ error: 'Rate limit exceeded. Try again later.' }), {
+      status: 429,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' },
+    });
+  }
+
   const url = new URL(req.url);
   const targetUrl = url.searchParams.get('url');
 
@@ -41,21 +77,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Follow redirects and get final response
     const response = await fetch(targetUrl, { redirect: 'follow' });
 
-    // Check if the redirect landed on an allowed host
+    // Validate redirect destination
     const finalUrl = response.url;
     if (finalUrl !== targetUrl) {
       const finalHostname = new URL(finalUrl).hostname.toLowerCase();
-      const isAllowed = ALLOWED_HOSTS.some(h => finalHostname === h || finalHostname.endsWith('.' + h));
-      if (!isAllowed) {
-        // Also allow common CDN hosts for GitHub/HF redirects
-        const cdnHosts = ['github-releases.githubusercontent.com', 'github-cloud.githubusercontent.com', 'github-cloud.s3.amazonaws.com'];
-        const isCdn = cdnHosts.some(h => finalHostname === h || finalHostname.endsWith('.' + h));
-        if (!isCdn) {
-          throw new Error(`Redirect to disallowed host: ${finalHostname}`);
-        }
+      if (!isAllowedHost(finalHostname)) {
+        throw new Error(`Redirect to disallowed host: ${finalHostname}`);
       }
     }
 
@@ -69,7 +98,6 @@ Deno.serve(async (req) => {
     const cl = response.headers.get('content-length');
     if (cl) headers.set('Content-Length', cl);
 
-    // Stream the response body through
     return new Response(response.body, { status: 200, headers });
   } catch (error) {
     console.error('Proxy error:', error);

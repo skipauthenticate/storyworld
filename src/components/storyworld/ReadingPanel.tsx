@@ -1,6 +1,6 @@
 import { Chapter, Sentence } from "@/data/sampleBooks";
 import { SentenceRenderer } from "./SentenceRenderer";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 
 interface ReadingPanelProps {
   chapter: Chapter;
@@ -18,7 +18,18 @@ export function ReadingPanel({
   onSelectSentence,
 }: ReadingPanelProps) {
   const activeSentenceRef = useRef<HTMLSpanElement | null>(null);
-  let globalIndex = 0;
+
+  // Pre-compute sentence-to-global-index mapping
+  const sentenceIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    let idx = 0;
+    for (const scene of chapter.scenes) {
+      for (const sentence of scene.sentences) {
+        map.set(sentence.id, idx++);
+      }
+    }
+    return map;
+  }, [chapter]);
 
   // Auto-scroll to active sentence during narration
   useEffect(() => {
@@ -29,9 +40,9 @@ export function ReadingPanel({
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[680px] mx-auto px-8 py-12">
+      <div className="max-w-[680px] mx-auto px-4 sm:px-8 py-8 sm:py-12">
         {/* Chapter Title */}
-        <h2 className="text-[28px] font-bold font-serif text-gold mb-8 tracking-wide">
+        <h2 className="text-2xl sm:text-[28px] font-bold font-serif text-primary mb-8 tracking-wide">
           {chapter.title}
         </h2>
 
@@ -54,9 +65,9 @@ export function ReadingPanel({
             )}
 
             {/* Sentences as flowing paragraphs */}
-            <div className="text-[17.5px] leading-[1.85] tracking-[0.01em] text-foreground">
+            <div className="text-[16px] sm:text-[17.5px] leading-[1.85] tracking-[0.01em] text-foreground">
               {scene.sentences.map((sentence) => {
-                const idx = globalIndex++;
+                const idx = sentenceIndexMap.get(sentence.id) ?? 0;
                 const isActive = idx === activeSentenceIndex && isPlaying;
                 return (
                   <SentenceRenderer

@@ -1,6 +1,5 @@
 import { Sentence } from "@/data/sampleBooks";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
 import { forwardRef } from "react";
 
 interface SentenceRendererProps {
@@ -41,9 +40,8 @@ export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProp
     const showHighlight = readingMode !== "classic" && isActive;
 
     return (
-      <motion.span
+      <span
         ref={ref}
-        layout
         className={cn(
           "cursor-pointer transition-all duration-400 rounded-sm px-0.5 -mx-0.5 inline",
           getStateClass(index, activeSentenceIndex, isPlaying),
@@ -55,7 +53,7 @@ export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProp
         onClick={() => onSelect(sentence)}
       >
         {sentence.text}{" "}
-      </motion.span>
+      </span>
     );
   }
 );
