@@ -27,7 +27,8 @@ function splitIntoSentences(text: string): string[] {
   
   return parts
     .map((s) => s.replace(/<<DOT>>/g, ".").trim())
-    .filter((s) => s.length > 5);
+    .filter((s) => s.length > 20)
+    .filter((s) => !/^(chapter\s+[\divxlc]+|table\s+of\s+contents|contents|§\s*\d+)$/i.test(s));
 }
 
 /**
@@ -69,19 +70,25 @@ function extractText(html: string): string {
   // Remove script and style elements
   div.querySelectorAll("script, style").forEach((el) => el.remove());
   
-  // Get text with paragraph breaks preserved
+  // Get text with paragraph breaks preserved (avoid nested block duplication)
   const blocks: string[] = [];
-  div.querySelectorAll("p, h1, h2, h3, h4, h5, h6, div, li, blockquote").forEach((el) => {
-    const t = (el as HTMLElement).innerText?.trim();
+  div.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li, blockquote").forEach((el) => {
+    const t = (el as HTMLElement).innerText?.replace(/\s+/g, " ").trim();
     if (t) blocks.push(t);
   });
-  
-  // If no block elements found, fall back to textContent
+
+  // If no block elements found, fall back to full innerText
   if (blocks.length === 0) {
-    return div.textContent?.trim() ?? "";
+    return (div as HTMLElement).innerText?.trim() ?? "";
   }
-  
-  return blocks.join("\n\n");
+
+  // De-duplicate repeated blocks (common in some EPUB DOM structures)
+  const deduped = blocks.filter((block, idx) => {
+    const normalized = block.toLowerCase();
+    return idx === 0 || normalized !== blocks[idx - 1].toLowerCase();
+  });
+
+  return deduped.join("\n\n");
 }
 
 /**
@@ -152,35 +159,44 @@ export async function parseEpub(file: File): Promise<Book> {
         /^\s*(cover|title\s+page|copyright|dedication)\s*$/im.test(textLower)
       );
 
-      // Detect copyright / legal pages by content
-      const hasCopyrightContent = /copyright\s*©|all\s+rights?\s+reserved|rights?\s+(of|to)\s+.*reproduc/i.test(textLower);
-      const isCopyrightPage = hasCopyrightContent && text.length < 3000;
+      const legalPattern = /copyright\s*©|all\s+rights?\s+reserved|rights?\s+(of|to)\s+.*reproduc|this\s+publication\s+is\s+protected|non-exclusive|non-transferable|epubbooks|www\./i;
+      const legalHitCount = (textLower.match(/copyright|all\s+rights?\s+reserved|non-transferable|publication\s+is\s+protected|epubbooks|www\./g) ?? []).length;
+      const hasCopyrightContent = legalPattern.test(textLower);
+      const startsWithLegal = legalPattern.test(textLower.slice(0, 1500));
 
-      // Detect title pages: short sections where book title + author appear
-      const isTitlePage = text.length < 1000 &&
+      // Remove duplicated / legal front-matter paragraphs before chapter parsing
+      const rawParagraphs = text
+        .split(/\n\n+/)
+        .map((p) => p.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+
+      const uniqueParagraphs = rawParagraphs.filter((p, idx) => {
+        const normalized = p.toLowerCase();
+        return idx === rawParagraphs.findIndex((x) => x.toLowerCase() === normalized);
+      });
+
+      const contentParagraphs = uniqueParagraphs.filter((p) => !legalPattern.test(p.toLowerCase()));
+      const cleanText = contentParagraphs.join("\n\n").trim();
+
+      // Detect title pages: short sections where book title + author appear, but no narrative
+      const isTitlePage = text.length < 1500 &&
         textLower.includes(title.toLowerCase()) &&
-        textLower.includes(author.toLowerCase());
+        textLower.includes(author.toLowerCase()) &&
+        cleanText.length < 400;
+
+      // Detect pure legal pages, including long duplicated ones
+      const isCopyrightPage = (hasCopyrightContent && legalHitCount >= 2 && cleanText.length < 600) ||
+        (startsWithLegal && legalHitCount >= 4 && cleanText.length < 1500);
 
       if (isTocPage || isFrontMatter || isNavContent || isCopyrightPage || isTitlePage) continue;
-      
+      if (!cleanText || cleanText.length < 80) continue;
+
       // Find TOC label for this spine item
       const tocEntry = toc.find(
         (t: any) => item.href?.includes(t.href?.split("#")[0])
       );
       const chapterTitle = tocEntry?.label?.trim() || `Chapter ${chapters.length + 1}`;
       
-      // Strip leading copyright/legal paragraphs from content
-      let cleanText = text;
-      if (hasCopyrightContent) {
-        const paragraphs = cleanText.split(/\n\n+/);
-        const firstNonLegal = paragraphs.findIndex(
-          (p) => !/copyright\s*©|all\s+rights?\s+reserved|rights?\s+(of|to)\s+.*reproduc|this\s+publication\s+is\s+protected|non-exclusive|non-transferable|epubbooks|www\./i.test(p)
-        );
-        if (firstNonLegal > 0) {
-          cleanText = paragraphs.slice(firstNonLegal).join("\n\n");
-        }
-      }
-
       // Split into sentences
       const sentenceTexts = splitIntoSentences(cleanText);
       if (sentenceTexts.length === 0) continue;
