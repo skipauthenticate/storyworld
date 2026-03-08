@@ -24,9 +24,7 @@ let ttsState: TTSState = {
 
 let initPromise: Promise<TTSEngine> | null = null;
 
-const VOICE_MODEL_URL = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main/en_US-lessac-medium.onnx';
-const TOKENS_URL = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main/tokens.txt';
-
+const VOICE_MODEL_BASE = 'https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/main';
 const TTS_MODEL_ID = 'piper-en-lessac-medium';
 
 /**
@@ -43,44 +41,58 @@ export async function initTTS(): Promise<TTSEngine> {
       const { RunAnywhere, SDKEnvironment, ModelManager, ModelCategory, ModelStatus } = await import('@runanywhere/web');
       const { ONNX, TTS, SherpaONNXBridge } = await import('@runanywhere/web-onnx');
 
-      // Point the bridge to the correct WASM location (copied by vite-plugin-static-copy)
+      // Point the bridge to the correct WASM location
       SherpaONNXBridge.shared.wasmUrl = new URL('/assets/sherpa-onnx-glue.js', window.location.origin).href;
 
-      await RunAnywhere.initialize({
-        environment: SDKEnvironment.Development,
-        debug: true,
-      });
+      if (!RunAnywhere.isInitialized) {
+        await RunAnywhere.initialize({
+          environment: SDKEnvironment.Development,
+          debug: false,
+        });
+      }
 
-      await ONNX.register();
+      if (!ONNX.isRegistered) {
+        await ONNX.register();
+      }
 
       // Register the TTS model in the catalog
       ModelManager.registerModels([{
         id: TTS_MODEL_ID,
         name: 'Piper EN US Lessac Medium',
-        url: VOICE_MODEL_URL,
+        url: `${VOICE_MODEL_BASE}/en_US-lessac-medium.onnx`,
         modality: ModelCategory.SpeechSynthesis,
         additionalFiles: [
-          { filename: 'tokens.txt', url: TOKENS_URL },
+          { filename: 'tokens.txt', url: `${VOICE_MODEL_BASE}/tokens.txt` },
         ],
       } as any]);
 
-      // Check if already downloaded
-      const models = ModelManager.getModels();
-      const ttsModel = models.find((m: any) => m.id === TTS_MODEL_ID);
-      
-      if (!ttsModel || ttsModel.status === ModelStatus.Registered) {
-        console.log('[STORYWORLD] Downloading TTS model...');
+      // Download if needed
+      const model = ModelManager.getModels().find((m: any) => m.id === TTS_MODEL_ID);
+      if (!model || model.status === ModelStatus.Registered) {
+        console.log('[STORYWORLD] Downloading TTS model (~65MB)...');
         await ModelManager.downloadModel(TTS_MODEL_ID);
         console.log('[STORYWORLD] TTS model downloaded');
+      } else {
+        console.log('[STORYWORLD] TTS model already downloaded, status:', model.status);
       }
 
-      // Load the model (this writes to WASM FS and calls TTS.loadVoice)
-      console.log('[STORYWORLD] Loading TTS model...');
-      await ModelManager.loadModel(TTS_MODEL_ID, { coexist: true });
-      console.log('[STORYWORLD] TTS model loaded');
+      // Load the model (writes files to WASM FS and calls TTS.loadVoice internally)
+      const currentModel = ModelManager.getModels().find((m: any) => m.id === TTS_MODEL_ID);
+      if (currentModel?.status !== ModelStatus.Loaded) {
+        console.log('[STORYWORLD] Loading TTS model into WASM...');
+        const loaded = await ModelManager.loadModel(TTS_MODEL_ID, { coexist: true });
+        if (!loaded) {
+          throw new Error(`ModelManager.loadModel returned false for ${TTS_MODEL_ID}`);
+        }
+        console.log('[STORYWORLD] TTS model loaded into WASM');
+      }
+
+      // Verify TTS is actually ready by checking the extension
+      // TTS.synthesize will throw if _ttsHandle === 0
+      // We trust loadModel succeeded if we got here
 
       ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
-      console.log('[STORYWORLD] RunAnywhere TTS initialized (Piper neural voice)');
+      console.log('[STORYWORLD] ✓ RunAnywhere TTS initialized (Piper neural voice)');
       return 'runanywhere' as TTSEngine;
     } catch (err) {
       console.warn('[STORYWORLD] RunAnywhere TTS unavailable, trying Web Speech API:', err);
@@ -88,14 +100,12 @@ export async function initTTS(): Promise<TTSEngine> {
 
     // Fallback to Web Speech API
     if ('speechSynthesis' in window) {
-      // Ensure voices are loaded
       await new Promise<void>((resolve) => {
         const voices = speechSynthesis.getVoices();
         if (voices.length > 0) {
           resolve();
         } else {
           speechSynthesis.onvoiceschanged = () => resolve();
-          // Timeout in case event never fires
           setTimeout(resolve, 1000);
         }
       });
@@ -132,12 +142,23 @@ export async function speakSentence(
     try {
       const { TTS, AudioPlayback } = await import('@runanywhere/web-onnx');
       const result = await TTS.synthesize(text, { speed });
-      const player = new AudioPlayback();
-      await player.play(result.audioData, result.sampleRate);
-      player.dispose();
-      onEnd?.();
+      
+      return new Promise<void>((resolve) => {
+        const player = new AudioPlayback();
+        player.play(result.audioData, result.sampleRate).then(() => {
+          player.dispose();
+          onEnd?.();
+          resolve();
+        }).catch((err: any) => {
+          console.error('[STORYWORLD] AudioPlayback error:', err);
+          player.dispose();
+          onEnd?.();
+          resolve();
+        });
+      });
     } catch (err) {
       console.error('[STORYWORLD] RunAnywhere TTS synthesis error, falling back:', err);
+      // Fall back to web speech for this sentence
       speakWithWebSpeech(text, speed, onEnd);
     }
   } else if (ttsState.engine === 'webspeech') {
@@ -153,7 +174,6 @@ function speakWithWebSpeech(text: string, speed: number, onEnd?: () => void) {
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
 
-  // Try to pick a good English voice
   const voices = speechSynthesis.getVoices();
   const preferred = voices.find(
     (v) => v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Google US'))
