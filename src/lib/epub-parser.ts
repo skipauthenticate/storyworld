@@ -116,6 +116,9 @@ export async function parseEpub(file: File): Promise<Book> {
     throw new Error("Could not read book chapters. The EPUB may be malformed.");
   }
   
+  // Build a set of TOC hrefs so we can identify the TOC spine item
+  const tocHrefs = new Set(toc.map((t: any) => t.href?.split("#")[0]).filter(Boolean));
+
   const chapters: Chapter[] = [];
   let globalSentenceCount = 0;
   
@@ -131,6 +134,25 @@ export async function parseEpub(file: File): Promise<Book> {
       
       const text = extractText(html);
       if (!text || text.length < 30) continue; // Skip very short/empty sections
+
+      // Skip front-matter: TOC pages, title pages, copyright, etc.
+      const textLower = text.toLowerCase();
+      const hrefLower = (item.href || "").toLowerCase();
+
+      // Detect TOC pages: high ratio of TOC entry labels in the text
+      const tocLabelMatches = toc.filter((t: any) => t.label && text.includes(t.label.trim())).length;
+      const isTocPage = toc.length > 3 && tocLabelMatches >= toc.length * 0.5;
+
+      // Detect by href naming conventions
+      const isFrontMatter = /\b(toc|table.?of.?contents|titlepage|title-page|copyright|cover|dedication|preface|foreword|frontmatter)\b/i.test(hrefLower);
+
+      // Detect by content patterns (short text that's mostly navigation)
+      const isNavContent = text.length < 500 && (
+        /table\s+of\s+contents/i.test(textLower) ||
+        /^\s*(cover|title\s+page|copyright|dedication)\s*$/im.test(textLower)
+      );
+
+      if (isTocPage || isFrontMatter || isNavContent) continue;
       
       // Find TOC label for this spine item
       const tocEntry = toc.find(
