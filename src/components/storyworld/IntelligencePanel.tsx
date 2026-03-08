@@ -42,6 +42,7 @@ export function IntelligencePanel({
     { id: "characters" as const, label: "Characters", icon: User },
     { id: "themes" as const, label: "Themes", icon: Sparkles },
     { id: "chat" as const, label: "AI Chat", icon: Brain },
+    { id: "research" as const, label: "Research", icon: FlaskConical },
   ];
 
   return (
