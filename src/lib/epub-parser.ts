@@ -176,34 +176,50 @@ export async function parseEpub(file: File): Promise<Book> {
         /^\s*(cover|title\s+page|copyright|dedication)\s*$/im.test(textLower)
       );
 
-      const legalPattern = /copyright\s*©|all\s+rights?\s+reserved|rights?\s+(of|to)\s+.*reproduc|this\s+publication\s+is\s+protected|non-exclusive|non-transferable|epubbooks|www\./i;
-      const legalHitCount = (textLower.match(/copyright|all\s+rights?\s+reserved|non-transferable|publication\s+is\s+protected|epubbooks|www\./g) ?? []).length;
-      const hasCopyrightContent = legalPattern.test(textLower);
-      const startsWithLegal = legalPattern.test(textLower.slice(0, 1500));
-
-      // Remove duplicated / legal front-matter paragraphs before chapter parsing
+      // Generic legal/boilerplate detection — not tied to any publisher
+      const legalSignals = [
+        /copyright\s*[©(]/i,
+        /all\s+rights?\s+reserved/i,
+        /this\s+(publication|book|ebook|work)\s+is\s+(protected|subject)/i,
+        /no\s+part\s+of\s+this\s+(book|publication|text|work)/i,
+        /without\s+(the\s+)?(prior\s+)?(written\s+)?permission/i,
+        /non-exclusive|non-transferable/i,
+        /reproduced|transmitted|downloaded|decompiled/i,
+        /isbn\s*[-:]?\s*[\d-]{10,}/i,
+        /published\s+by|printed\s+in|first\s+(published|edition|printing)/i,
+      ];
+      const legalHits = legalSignals.filter((rx) => rx.test(textLower)).length;
+      
+      // Split into paragraphs and de-dup
       const rawParagraphs = text
         .split(/\n\n+/)
         .map((p) => p.replace(/\s+/g, " ").trim())
-        .filter(Boolean);
+        .filter((p) => p.length > 1);
 
-      const uniqueParagraphs = rawParagraphs.filter((p, idx) => {
-        const normalized = p.toLowerCase();
-        return idx === rawParagraphs.findIndex((x) => x.toLowerCase() === normalized);
+      const seen = new Set<string>();
+      const uniqueParagraphs = rawParagraphs.filter((p) => {
+        const key = p.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
 
-      const contentParagraphs = uniqueParagraphs.filter((p) => !legalPattern.test(p.toLowerCase()));
+      // Remove paragraphs that are purely legal boilerplate
+      const isLegalParagraph = (p: string) => {
+        const lower = p.toLowerCase();
+        const hits = legalSignals.filter((rx) => rx.test(lower)).length;
+        return hits >= 2 || (hits >= 1 && p.length < 200);
+      };
+      const contentParagraphs = uniqueParagraphs.filter((p) => !isLegalParagraph(p));
       const cleanText = contentParagraphs.join("\n\n").trim();
 
-      // Detect title pages: short sections where book title + author appear, but no narrative
-      const isTitlePage = text.length < 1500 &&
-        textLower.includes(title.toLowerCase()) &&
-        textLower.includes(author.toLowerCase()) &&
-        cleanText.length < 400;
+      // Skip pages that are predominantly legal/boilerplate
+      const isCopyrightPage = legalHits >= 3 || (legalHits >= 2 && cleanText.length < 500);
 
-      // Detect pure legal pages, including long duplicated ones
-      const isCopyrightPage = (hasCopyrightContent && legalHitCount >= 2 && cleanText.length < 600) ||
-        (startsWithLegal && legalHitCount >= 4 && cleanText.length < 1500);
+      // Skip title pages: short sections with book title + author and little else
+      const isTitlePage = cleanText.length < 500 &&
+        textLower.includes(title.toLowerCase()) &&
+        textLower.includes(author.toLowerCase());
 
       if (isTocPage || isFrontMatter || isNavContent || isCopyrightPage || isTitlePage) continue;
       if (!cleanText || cleanText.length < 80) continue;
