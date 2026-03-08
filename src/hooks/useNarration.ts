@@ -92,7 +92,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled }: U
       playingRef.current = true;
       speakCurrent(indexRef.current);
     }
-  }, [isPlaying, voiceEnabled, speakCurrent]);
+  }, [isPlaying, speakCurrent]);
 
   const goToNext = useCallback(() => {
     stopSpeaking();
