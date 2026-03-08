@@ -183,7 +183,7 @@ const Index = () => {
               className="fixed bottom-20 right-3 z-40 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg"
               aria-label="Open intelligence panel"
             >
-              <Brain className="w-4 h-4" />
+              <Zap className="w-4 h-4" />
             </button>
           )}
           <Sheet open={intelligenceEnabled} onOpenChange={setIntelligenceEnabled}>
