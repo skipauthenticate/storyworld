@@ -27,6 +27,11 @@ let initPromise: Promise<TTSEngine> | null = null;
 const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz';
 const MODEL_DIR = '/models/piper-en-lessac';
 
+function getProxyUrl(url: string): string {
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  return `https://${projectId}.supabase.co/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
+}
+
 /**
  * Initialize TTS engine. Tries RunAnywhere first, falls back to Web Speech API.
  */
