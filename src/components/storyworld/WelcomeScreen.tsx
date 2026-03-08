@@ -1,5 +1,5 @@
 import { Book } from "@/data/sampleBooks";
-import { BookOpen, Upload } from "lucide-react";
+import { BookOpen } from "lucide-react";
 
 interface WelcomeScreenProps {
   books: Book[];
@@ -45,11 +45,10 @@ export function WelcomeScreen({ books, onSelectBook }: WelcomeScreenProps) {
           ))}
         </div>
 
-        {/* Upload hint */}
-        <div className="flex items-center justify-center gap-2 text-muted-foreground/50 text-[11px] font-mono">
-          <Upload className="w-3 h-3" />
-          <span>Drag an EPUB or PDF to import</span>
-        </div>
+        {/* Coming soon hint */}
+        <p className="text-muted-foreground/40 text-[11px] font-mono">
+          EPUB &amp; PDF import — coming soon
+        </p>
       </div>
     </div>
   );

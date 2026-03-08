@@ -15,6 +15,7 @@ interface LibrarySidebarProps {
   onSelectChapter: (chapter: Chapter) => void;
   onSetMode: (mode: ReadingMode) => void;
   onShowCharacters: () => void;
+  onShowThemes?: () => void;
 }
 
 const modeConfig = {
@@ -32,6 +33,7 @@ export function LibrarySidebar({
   onSelectChapter,
   onSetMode,
   onShowCharacters,
+  onShowThemes,
 }: LibrarySidebarProps) {
   const [expandedBook, setExpandedBook] = useState<string | null>(activeBook?.id ?? null);
 
@@ -159,7 +161,10 @@ export function LibrarySidebar({
             <span>Characters</span>
             <span className="ml-auto text-[10px] text-muted-foreground">{activeBook.characters.length}</span>
           </button>
-          <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+          <button
+            onClick={onShowThemes}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+          >
             <Sparkles className="w-4 h-4" />
             <span>Themes</span>
             <span className="ml-auto text-[10px] text-muted-foreground">{activeBook.themes.length}</span>

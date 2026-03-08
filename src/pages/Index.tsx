@@ -18,6 +18,7 @@ const Index = () => {
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
   const [showIntelligence, setShowIntelligence] = useState(true);
   const [showCharacters, setShowCharacters] = useState(false);
+  const [showThemes, setShowThemes] = useState(false);
 
   const allSentences = activeChapter?.scenes.flatMap((s) => s.sentences) ?? [];
 
@@ -31,6 +32,7 @@ const Index = () => {
     goToPrevious,
     goToSentence,
     setSpeed: setNarrationSpeed,
+    reset: resetNarration,
   } = useNarration({
     sentences: allSentences,
     speed,
@@ -53,6 +55,7 @@ const Index = () => {
   const handleSelectChapter = useCallback((chapter: Chapter) => {
     setActiveChapter(chapter);
     setSelectedSentence(null);
+    // Reset handled automatically by useNarration detecting sentences change
   }, []);
 
   const handleSelectSentence = useCallback((sentence: Sentence) => {
@@ -114,6 +117,12 @@ const Index = () => {
         onSetMode={setReadingMode}
         onShowCharacters={() => {
           setShowCharacters(true);
+          setShowThemes(false);
+          setShowIntelligence(true);
+        }}
+        onShowThemes={() => {
+          setShowThemes(true);
+          setShowCharacters(false);
           setShowIntelligence(true);
         }}
       />
@@ -153,8 +162,10 @@ const Index = () => {
           selectedSentence={selectedSentence}
           book={activeBook}
           showCharacters={showCharacters}
+          showThemes={showThemes}
           onClose={() => setShowIntelligence(false)}
           onCloseCharacters={() => setShowCharacters(false)}
+          onCloseThemes={() => setShowThemes(false)}
         />
       )}
     </div>
