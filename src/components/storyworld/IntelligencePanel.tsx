@@ -165,14 +165,6 @@ function ContextContent({
         </div>
       )}
 
-      {/* Chapter Progress (when enrichment is active or completed) */}
-      {enrichment.queueState && enrichment.queueState.chapters.length > 0 && (
-        <ChapterProgressSection
-          chapters={enrichment.queueState.chapters}
-          book={book}
-          phase={enrichment.phase}
-        />
-      )}
     </div>
   );
 }
