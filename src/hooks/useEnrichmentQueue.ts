@@ -30,6 +30,9 @@ const CHARACTER_COLORS = [
 
 const ANNOTATION_BATCH_SIZE = 6;
 
+/** Yield to the browser's event loop so it can paint / handle input */
+const yieldToMain = (): Promise<void> => new Promise(r => setTimeout(r, 0));
+
 // ── Helpers ──
 
 function extractChapterText(chapter: Chapter, maxChars = 2000): string {
