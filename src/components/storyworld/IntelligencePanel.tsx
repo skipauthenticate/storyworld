@@ -250,6 +250,7 @@ function EnrichmentSection({ book, onUpdateBook }: { book: Book; onUpdateBook: (
         </>
       )}
     </div>
+  );
 }
 
 function PersistentChat({
