@@ -284,8 +284,8 @@ export async function speakSentence(
     try {
       const { TTS, AudioPlayback } = await import('@runanywhere/web-onnx');
       if (thisGen !== speakGeneration) { onEnd?.(); return; }
-      // Pass the active voice id so TTS uses correct model
-      const result = await TTS.synthesize(text, { speed, voiceId: activeVoiceId });
+      // The TTS API currently only supports synthesized with active voice loaded
+      const result = await TTS.synthesize(text, { speed });
       if (thisGen !== speakGeneration) { onEnd?.(); return; }
       const player = new AudioPlayback();
       currentPlayer = player;

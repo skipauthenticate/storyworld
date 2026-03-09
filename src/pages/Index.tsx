@@ -372,12 +372,19 @@ const Index = () => {
               voiceEnabled={voiceEnabled}
               intelligenceEnabled={intelligenceEnabled}
               chapterLabel={chapterLabel}
+              voiceId={voiceId}
               onTogglePlay={handleTogglePlay}
               onPrevious={goToPrevious}
               onNext={goToNext}
               onSpeedChange={setSpeed}
               onToggleVoice={() => setVoiceEnabled((v) => !v)}
               onToggleIntelligence={() => setIntelligenceEnabled((v) => !v)}
+              onVoiceChange={(id) => {
+                setVoiceId(id);
+                localStorage.setItem('storyworld-voice-id', id);
+                setTtsVoice(id);
+                if (!voiceEnabled) setVoiceEnabled(true);
+              }}
             />
           </>
         ) : (
