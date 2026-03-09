@@ -47,6 +47,18 @@ const Index = () => {
   const autoAdvanceRef = useRef(false);
 
   const allSentences = activeChapter?.scenes.flatMap((s) => s.sentences) ?? [];
+  const enrichmentOnUpdate = useCallback((patch: Partial<Book>) => {
+    if (activeBook) updateBook(activeBook.id, patch);
+  }, [activeBook, updateBook]);
+
+  const enrichment = useEnrichmentQueue(enrichmentOnUpdate);
+
+  // Keep enrichment aware of reading position
+  useEffect(() => {
+    if (activeChapter) {
+      enrichment.setReadingChapter(activeChapter.id);
+    }
+  }, [activeChapter, enrichment.setReadingChapter]);
 
   const { triggerImprovement } = useAutoResearch();
 
