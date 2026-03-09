@@ -8,54 +8,78 @@ interface UsePagedReaderOptions {
 
 export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePagedReaderOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [containerWidth, setContainerWidth] = useState(0);
   const pointerStart = useRef<{ x: number; y: number; time: number } | null>(null);
   const recalcTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const recalcPages = useCallback(() => {
-    const el = containerRef.current;
-    if (!el || !enabled) return;
-    const width = el.clientWidth;
+    const outer = containerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner || !enabled) return;
+
+    const width = outer.clientWidth;
     if (width === 0) return;
-    const pages = Math.max(1, Math.round(el.scrollWidth / width));
+    setContainerWidth(width);
+
+    // Temporarily reset transform to measure true scrollWidth
+    inner.style.transform = "none";
+
+    // Set column width to container width so each column = one page
+    inner.style.columnWidth = `${width}px`;
+
+    // Force reflow then measure
+    void inner.offsetHeight;
+
+    const scrollW = inner.scrollWidth;
+    const pages = Math.max(1, Math.ceil(scrollW / width));
     setTotalPages(pages);
     setCurrentPage((prev) => Math.min(prev, pages - 1));
   }, [enabled]);
 
-  // Recalc on resize / content change
+  // Apply transform whenever page or width changes
+  useEffect(() => {
+    const inner = innerRef.current;
+    if (!inner || !enabled || containerWidth === 0) return;
+    const offset = currentPage * containerWidth;
+    inner.style.transform = `translateX(-${offset}px)`;
+  }, [currentPage, enabled, containerWidth]);
+
+  // Observe resize + mutations
   useEffect(() => {
     if (!enabled) return;
-    const el = containerRef.current;
-    if (!el) return;
+    const outer = containerRef.current;
+    if (!outer) return;
 
-    const observer = new ResizeObserver(() => {
+    const schedule = () => {
       if (recalcTimer.current) clearTimeout(recalcTimer.current);
       recalcTimer.current = setTimeout(recalcPages, 80);
-    });
-    observer.observe(el);
+    };
 
-    // Also observe mutations (content changes from enrichment)
-    const mutObs = new MutationObserver(() => {
-      if (recalcTimer.current) clearTimeout(recalcTimer.current);
-      recalcTimer.current = setTimeout(recalcPages, 80);
-    });
-    mutObs.observe(el, { childList: true, subtree: true, characterData: true });
+    const resObs = new ResizeObserver(schedule);
+    resObs.observe(outer);
 
-    // Initial calc
-    setTimeout(recalcPages, 50);
+    const mutObs = new MutationObserver(schedule);
+    const inner = innerRef.current;
+    if (inner) {
+      mutObs.observe(inner, { childList: true, subtree: true, characterData: true });
+    }
+
+    // Initial calc after content renders
+    setTimeout(recalcPages, 100);
 
     return () => {
-      observer.disconnect();
+      resObs.disconnect();
       mutObs.disconnect();
       if (recalcTimer.current) clearTimeout(recalcTimer.current);
     };
   }, [enabled, recalcPages]);
 
-  // Reset page on chapter change (content changes)
   const resetPage = useCallback(() => {
     setCurrentPage(0);
-    setTimeout(recalcPages, 100);
+    setTimeout(recalcPages, 150);
   }, [recalcPages]);
 
   const nextPage = useCallback(() => {
@@ -78,25 +102,13 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
     });
   }, [onPrevChapter]);
 
-  // Navigate to page containing a specific element
   const goToPageContainingElement = useCallback((element: HTMLElement) => {
-    const container = containerRef.current;
-    if (!container || !enabled) return;
-    const containerWidth = container.clientWidth;
-    if (containerWidth === 0) return;
+    if (!enabled || containerWidth === 0) return;
     const page = Math.floor(element.offsetLeft / containerWidth);
     setCurrentPage(Math.max(0, Math.min(page, totalPages - 1)));
-  }, [enabled, totalPages]);
+  }, [enabled, containerWidth, totalPages]);
 
-  // Apply CSS transform for current page
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !enabled) return;
-    const offset = currentPage * el.clientWidth;
-    el.style.transform = `translateX(-${offset}px)`;
-  }, [currentPage, enabled]);
-
-  // Pointer events for swipe
+  // Swipe
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (!enabled) return;
     pointerStart.current = { x: e.clientX, y: e.clientY, time: Date.now() };
@@ -109,14 +121,13 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
     const dt = Date.now() - pointerStart.current.time;
     pointerStart.current = null;
 
-    // Must be more horizontal than vertical and meet threshold
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && dt < 500) {
       if (dx < 0) nextPage();
       else prevPage();
     }
   }, [enabled, nextPage, prevPage]);
 
-  // Tap zones: left 30% = prev, right 30% = next
+  // Tap zones
   const onTapZone = useCallback((e: React.MouseEvent) => {
     if (!enabled) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -128,6 +139,7 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
 
   return {
     containerRef,
+    innerRef,
     currentPage,
     totalPages,
     nextPage,
