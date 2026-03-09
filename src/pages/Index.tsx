@@ -46,6 +46,9 @@ const Index = () => {
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceId, setVoiceId] = useState<import('@/lib/tts-engine').VoiceId>(
+    () => (localStorage.getItem('storyworld-voice-id') as import('@/lib/tts-engine').VoiceId) || 'piper-en-lessac'
+  );
   const [intelligenceEnabled, setIntelligenceEnabled] = useState(true);
   const [speed, setSpeed] = useState(1.0);
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
