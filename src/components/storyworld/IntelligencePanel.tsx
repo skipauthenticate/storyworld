@@ -30,16 +30,53 @@ export function IntelligencePanel({
 }: IntelligencePanelProps) {
   const [chatExpanded, setChatExpanded] = useState(false);
 
+  // Compute overall progress for header display
+  const { phase, queueState, llmStatus, llmProgress } = enrichment;
+  const isProcessing = phase !== "idle" && phase !== "completed" && phase !== "error";
+  const isDownloading = llmStatus === "downloading" || llmStatus === "loading";
+
+  const overallProgress = (() => {
+    if (!queueState) return 0;
+    if (phase === "init-llm") return 5;
+    if (phase === "global-analysis") return 15;
+    if (phase === "completed") return 100;
+    const chapters = queueState.chapters;
+    if (chapters.length === 0) return 0;
+    const chapterProgress = chapters.reduce((sum, ch) => {
+      if (ch.status === "completed") return sum + 100;
+      return sum + ch.annotationProgress;
+    }, 0);
+    return Math.round(20 + (chapterProgress / chapters.length) * 0.8);
+  })();
+
+  const displayProgress = isDownloading ? llmProgress : overallProgress;
+
   return (
     <aside className={cn("w-[340px] min-w-[340px] h-full flex flex-col border-l border-border bg-card overflow-hidden", className)} role="complementary" aria-label="Intelligence panel">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-          Intelligence
-        </p>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close intelligence panel">
-          <X className="w-3.5 h-3.5" />
-        </button>
+      {/* Header with subtle progress */}
+      <div className="relative px-4 py-3 border-b border-border">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+              Intelligence
+            </p>
+            {isProcessing && (
+              <span className="text-[9px] font-mono text-primary animate-pulse">
+                Enriching · {displayProgress}%
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close intelligence panel">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        {/* Thin progress bar */}
+        {isProcessing && (
+          <div
+            className="absolute bottom-0 left-0 h-[1.5px] bg-primary transition-all duration-500 ease-out"
+            style={{ width: `${displayProgress}%` }}
+          />
+        )}
       </div>
 
       {/* Context content */}
