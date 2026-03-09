@@ -278,7 +278,7 @@ const Index = () => {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleTogglePlay, goToPrevious, goToNext]);
+  }, [handleTogglePlay, goToPrevious, goToNext, readingMode]);
 
   const showRightPanel = intelligenceEnabled && activeBook;
 
