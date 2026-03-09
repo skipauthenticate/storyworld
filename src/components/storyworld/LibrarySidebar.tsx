@@ -6,6 +6,7 @@ import { useState, useRef } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Switch } from "@/components/ui/switch";
+import type { QueuePhase } from "@/hooks/useEnrichmentQueue";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,7 @@ interface LibrarySidebarProps {
   onImportEpub: (file: File, enrich: boolean) => void;
   onDeleteBook: (bookId: string) => void;
   importing: boolean;
+  enrichment?: { phase: QueuePhase; overallProgress: number };
 }
 
 function SidebarContent({
