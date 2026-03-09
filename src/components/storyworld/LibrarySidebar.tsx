@@ -39,6 +39,7 @@ function SidebarContent({
   onImportEpub,
   onDeleteBook,
   importing,
+  enrichment,
   onItemClick,
 }: LibrarySidebarProps & { onItemClick?: () => void }) {
   const [expandedBook, setExpandedBook] = useState<string | null>(activeBook?.id ?? null);
