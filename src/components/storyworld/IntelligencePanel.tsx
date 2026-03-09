@@ -1,4 +1,4 @@
-import { Sentence, Book } from "@/data/sampleBooks";
+import { Sentence, Book, Chapter } from "@/data/sampleBooks";
 import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Zap, ChevronUp, AlertCircle, BookOpen, ArrowRight, Brain, CheckCircle2, Clock, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
