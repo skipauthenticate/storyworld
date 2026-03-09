@@ -112,6 +112,7 @@ export function useEnrichment() {
         if (!ok) throw new Error("Failed to initialize AI engine");
         if (abortRef.current) return;
 
+        const yieldToMain = (): Promise<void> => new Promise(r => setTimeout(r, 0));
         const sample = extractTextSample(book, 2500);
         const title = book.title;
         const author = book.author;
