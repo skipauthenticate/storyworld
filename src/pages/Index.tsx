@@ -361,6 +361,8 @@ const Index = () => {
           onClose={() => setIntelligenceEnabled(false)}
           enrichment={enrichment}
           currentChapterId={activeChapter?.id ?? null}
+          currentChapter={activeChapter}
+          activeSentenceIndex={activeSentenceIndex}
         />
       )}
 
@@ -384,6 +386,8 @@ const Index = () => {
                 className="w-full min-w-0 border-l-0"
                 enrichment={enrichment}
                 currentChapterId={activeChapter?.id ?? null}
+                currentChapter={activeChapter}
+                activeSentenceIndex={activeSentenceIndex}
               />
             </SheetContent>
           </Sheet>
