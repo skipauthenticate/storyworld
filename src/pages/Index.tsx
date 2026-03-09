@@ -319,6 +319,23 @@ const Index = () => {
         onImportEpub={handleImportEpub}
         onDeleteBook={handleDeleteBook}
         importing={importing}
+        enrichment={{
+          phase: enrichment.phase,
+          overallProgress: (() => {
+            const qs = enrichment.queueState;
+            if (!qs) return 0;
+            if (enrichment.phase === "init-llm") return 5;
+            if (enrichment.phase === "global-analysis") return 15;
+            if (enrichment.phase === "completed") return 100;
+            const chapters = qs.chapters;
+            if (chapters.length === 0) return 0;
+            const chapterProgress = chapters.reduce((sum, ch) => {
+              if (ch.status === "completed") return sum + 100;
+              return sum + ch.annotationProgress;
+            }, 0);
+            return Math.round(20 + (chapterProgress / chapters.length) * 0.8);
+          })(),
+        }}
       />
 
       <div id="main-content" className="flex-1 flex flex-col overflow-hidden">

@@ -139,6 +139,17 @@ function SidebarContent({
                     <Trash2 className="w-3 h-3" />
                   </button>
                 )}
+                {/* Enrichment status dot */}
+                {activeBook?.id === book.id && enrichment && enrichment.phase !== "idle" && (
+                  <div
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                      enrichment.phase === "completed"
+                        ? "bg-primary/40"
+                        : "bg-primary animate-pulse"
+                    )}
+                  />
+                )}
                 {book.chapters.length > 0 && (
                   <ChevronRight
                     className={cn(
