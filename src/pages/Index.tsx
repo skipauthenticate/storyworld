@@ -46,6 +46,9 @@ const Index = () => {
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceId, setVoiceId] = useState<import('@/lib/tts-engine').VoiceId>(
+    () => (localStorage.getItem('storyworld-voice-id') as import('@/lib/tts-engine').VoiceId) || 'piper-en-lessac'
+  );
   const [intelligenceEnabled, setIntelligenceEnabled] = useState(true);
   const [speed, setSpeed] = useState(1.0);
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
@@ -96,10 +99,12 @@ const Index = () => {
     goToPrevious,
     goToSentence,
     setSpeed: setNarrationSpeed,
+    setVoice: setTtsVoice,
   } = useNarration({
     sentences: allSentences,
     speed,
     voiceEnabled,
+    voiceId,
     onChapterEnd: handleChapterEnd,
   });
 
@@ -367,12 +372,19 @@ const Index = () => {
               voiceEnabled={voiceEnabled}
               intelligenceEnabled={intelligenceEnabled}
               chapterLabel={chapterLabel}
+              voiceId={voiceId}
               onTogglePlay={handleTogglePlay}
               onPrevious={goToPrevious}
               onNext={goToNext}
               onSpeedChange={setSpeed}
               onToggleVoice={() => setVoiceEnabled((v) => !v)}
               onToggleIntelligence={() => setIntelligenceEnabled((v) => !v)}
+              onVoiceChange={(id) => {
+                setVoiceId(id);
+                localStorage.setItem('storyworld-voice-id', id);
+                setTtsVoice(id);
+                if (!voiceEnabled) setVoiceEnabled(true);
+              }}
             />
           </>
         ) : (
