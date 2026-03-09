@@ -1,9 +1,10 @@
 import { Sentence, Book } from "@/data/sampleBooks";
-import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Zap, ChevronUp, AlertCircle, BookOpen } from "lucide-react";
+import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Zap, ChevronUp, AlertCircle, BookOpen, ArrowRight, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLLMChat } from "@/hooks/useLLMChat";
+import { useEnrichment, type EnrichmentPhase } from "@/hooks/useEnrichment";
 
 interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
