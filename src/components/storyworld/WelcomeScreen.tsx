@@ -94,6 +94,14 @@ export function WelcomeScreen({ books, onSelectBook, onImportEpub, importing }: 
             <p className="text-[13px] text-muted-foreground">
               {importing ? "Parsing EPUB…" : "Drop an EPUB here or click to import"}
             </p>
+            <label className="flex items-center gap-1.5 mt-1 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={enrichOnImport}
+                onCheckedChange={setEnrichOnImport}
+                className="scale-75"
+              />
+              <span className="text-[11px] text-muted-foreground">Enrich on import</span>
+            </label>
           </div>
         </div>
       </div>
