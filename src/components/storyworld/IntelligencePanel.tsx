@@ -262,31 +262,37 @@ function EnrichmentSection({
       )}
 
       {isProcessing && (
-        <>
-          <div className="w-full space-y-2">
-            <div className="flex items-center justify-between text-[10px]">
-              <span className="text-muted-foreground">{PHASE_LABELS[phase]}</span>
-              <span className="text-muted-foreground">
-                {isDownloading ? `${llmProgress}%` : `${overallProgress}%`}
-              </span>
-            </div>
-            <div className="w-full bg-muted/30 rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-primary h-full rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${isDownloading ? llmProgress : overallProgress}%` }}
-              />
-            </div>
+        <div className="w-full space-y-3 p-3 rounded-lg border border-primary/20 bg-primary/5">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+            <span className="text-[11px] font-medium text-foreground">{PHASE_LABELS[phase]}</span>
+            <span className="ml-auto text-[11px] font-mono text-primary">
+              {isDownloading ? `${llmProgress}%` : `${overallProgress}%`}
+            </span>
+          </div>
+
+          <div className="w-full bg-muted/40 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-primary h-full rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${isDownloading ? llmProgress : overallProgress}%` }}
+            />
           </div>
 
           {isDownloading && (
             <p className="text-[9px] text-muted-foreground">
-              First-time model download (~350MB)
+              First-time AI model download (~350MB)
+            </p>
+          )}
+
+          {phase === "global-analysis" && (
+            <p className="text-[9px] text-muted-foreground">
+              Extracting characters & themes…
             </p>
           )}
 
           {phase === "chapter-processing" && queueState && (
             <p className="text-[9px] text-muted-foreground">
-              {queueState.chapters.filter((c) => c.status === "completed").length}/{queueState.chapters.length} chapters done · enriching in background
+              {queueState.chapters.filter((c) => c.status === "completed").length} of {queueState.chapters.length} chapters enriched
             </p>
           )}
 
@@ -296,7 +302,7 @@ function EnrichmentSection({
           >
             Pause
           </button>
-        </>
+        </div>
       )}
     </div>
   );
