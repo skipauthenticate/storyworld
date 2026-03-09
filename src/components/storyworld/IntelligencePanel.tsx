@@ -65,7 +65,7 @@ function ContextContent({
 }: {
   selectedSentence: Sentence | null;
   book: Book;
-  enrichment: ReturnType<typeof useEnrichmentQueue>;
+  enrichment: EnrichmentQueueHook;
 }) {
   const hasEnrichment = book.characters.length > 0 || book.themes.length > 0;
   const isActive = enrichment.phase !== "idle" && enrichment.phase !== "completed" && enrichment.phase !== "error";
