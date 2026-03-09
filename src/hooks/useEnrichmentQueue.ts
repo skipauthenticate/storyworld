@@ -205,6 +205,8 @@ export function useEnrichmentQueue(
           // Continue with next batch
         }
 
+        batchCount++;
+
         // Progressive update: apply annotations so far to the book
         const progress = Math.round(
           ((Object.keys(annotations).length) / allSentences.length) * 100
@@ -219,8 +221,10 @@ export function useEnrichmentQueue(
           ),
         }));
 
-        // Apply to book immediately
-        applyAnnotationsToBook(book, chapter.id, annotations, onBookUpdate);
+        // Throttle book re-renders: only apply every 2nd batch (or on last batch)
+        if (batchCount % 2 === 0 || i + ANNOTATION_BATCH_SIZE >= unannotated.length) {
+          applyAnnotationsToBook(book, chapter.id, annotations, onBookUpdate);
+        }
       }
 
       return annotations;
