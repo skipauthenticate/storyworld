@@ -217,14 +217,14 @@ export function ReadingPanel({
         /* Paginated mode */
         <div
           ref={pagedOuterRef}
-          className="flex-1 overflow-hidden relative select-none"
+          className="flex-1 overflow-hidden relative select-none px-4 sm:px-8 py-8 sm:py-12"
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
           onClick={onTapZone}
         >
           <div
             ref={pagedInnerRef}
-            className="h-full px-4 sm:px-8 py-8 sm:py-12 transition-transform duration-300 ease-in-out"
+            className="h-full transition-transform duration-300 ease-in-out will-change-transform"
             style={{
               columnFill: "auto",
               columnGap: "0px",

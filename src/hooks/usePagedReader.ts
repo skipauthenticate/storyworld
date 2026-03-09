@@ -54,7 +54,9 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
     const inner = innerRef.current;
     if (!inner || !enabled || containerWidth === 0) return;
     const offset = currentPage * containerWidth;
-    inner.style.transform = `translateX(-${offset}px)`;
+    requestAnimationFrame(() => {
+      inner.style.transform = `translateX(-${offset}px)`;
+    });
   }, [currentPage, enabled, containerWidth]);
 
   // Observe resize + mutations
