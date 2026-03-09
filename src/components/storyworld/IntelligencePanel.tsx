@@ -13,6 +13,8 @@ interface IntelligencePanelProps {
   onClose: () => void;
   enrichment: EnrichmentQueueHook;
   currentChapterId?: string | null;
+  currentChapter?: Chapter | null;
+  activeSentenceIndex?: number;
   className?: string;
 }
 
