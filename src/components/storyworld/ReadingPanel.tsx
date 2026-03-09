@@ -68,7 +68,8 @@ export function ReadingPanel({
   }, [chapter]);
 
   const {
-    containerRef: pagedContainerRef,
+    containerRef: pagedOuterRef,
+    innerRef: pagedInnerRef,
     currentPage,
     totalPages,
     nextPage,
