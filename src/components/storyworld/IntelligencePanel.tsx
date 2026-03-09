@@ -4,14 +4,14 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLLMChat } from "@/hooks/useLLMChat";
-import { useEnrichmentQueue, type QueuePhase } from "@/hooks/useEnrichmentQueue";
+import type { EnrichmentQueueHook, QueuePhase } from "@/hooks/useEnrichmentQueue";
 import type { ChapterEnrichment } from "@/lib/enrichment-storage";
 
 interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
   book: Book;
   onClose: () => void;
-  onUpdateBook: (patch: Partial<Book>) => void;
+  enrichment: EnrichmentQueueHook;
   currentChapterId?: string | null;
   className?: string;
 }
@@ -20,19 +20,11 @@ export function IntelligencePanel({
   selectedSentence,
   book,
   onClose,
-  onUpdateBook,
+  enrichment,
   currentChapterId,
   className,
 }: IntelligencePanelProps) {
   const [chatExpanded, setChatExpanded] = useState(false);
-  const enrichment = useEnrichmentQueue(onUpdateBook);
-
-  // Keep enrichment aware of reading position
-  useEffect(() => {
-    if (currentChapterId) {
-      enrichment.setReadingChapter(currentChapterId);
-    }
-  }, [currentChapterId, enrichment.setReadingChapter]);
 
   return (
     <aside className={cn("w-[340px] min-w-[340px] h-full flex flex-col border-l border-border bg-card overflow-hidden", className)} role="complementary" aria-label="Intelligence panel">
