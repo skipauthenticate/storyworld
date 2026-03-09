@@ -14,6 +14,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Zap } from "lucide-react";
 import { parseEpub } from "@/lib/epub-parser";
+import { loadQueueState } from "@/lib/enrichment-storage";
 import { toast } from "sonner";
 
 const FONT_SIZE_KEY = "storyworld-font-size";
