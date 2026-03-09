@@ -1,16 +1,18 @@
 import { Sentence, Book } from "@/data/sampleBooks";
-import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Zap, ChevronUp, AlertCircle, BookOpen, ArrowRight, Brain } from "lucide-react";
+import { X, MessageSquare, Sparkles, User, Send, Loader2, Download, Zap, ChevronUp, AlertCircle, BookOpen, ArrowRight, Brain, CheckCircle2, Clock, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLLMChat } from "@/hooks/useLLMChat";
-import { useEnrichment, type EnrichmentPhase } from "@/hooks/useEnrichment";
+import { useEnrichmentQueue, type QueuePhase } from "@/hooks/useEnrichmentQueue";
+import type { ChapterEnrichment } from "@/lib/enrichment-storage";
 
 interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
   book: Book;
   onClose: () => void;
   onUpdateBook: (patch: Partial<Book>) => void;
+  currentChapterId?: string | null;
   className?: string;
 }
 
@@ -19,9 +21,18 @@ export function IntelligencePanel({
   book,
   onClose,
   onUpdateBook,
+  currentChapterId,
   className,
 }: IntelligencePanelProps) {
   const [chatExpanded, setChatExpanded] = useState(false);
+  const enrichment = useEnrichmentQueue(onUpdateBook);
+
+  // Keep enrichment aware of reading position
+  useEffect(() => {
+    if (currentChapterId) {
+      enrichment.setReadingChapter(currentChapterId);
+    }
+  }, [currentChapterId, enrichment.setReadingChapter]);
 
   return (
     <aside className={cn("w-[340px] min-w-[340px] h-full flex flex-col border-l border-border bg-card overflow-hidden", className)} role="complementary" aria-label="Intelligence panel">
@@ -37,7 +48,11 @@ export function IntelligencePanel({
 
       {/* Context content */}
       <div className={cn("overflow-y-auto transition-all", chatExpanded ? "flex-shrink-0 max-h-[35%]" : "flex-1")}>
-        <ContextContent selectedSentence={selectedSentence} book={book} onUpdateBook={onUpdateBook} />
+        <ContextContent
+          selectedSentence={selectedSentence}
+          book={book}
+          enrichment={enrichment}
+        />
       </div>
 
       {/* Persistent chat area */}
@@ -51,8 +66,17 @@ export function IntelligencePanel({
   );
 }
 
-function ContextContent({ selectedSentence, book, onUpdateBook }: { selectedSentence: Sentence | null; book: Book; onUpdateBook: (patch: Partial<Book>) => void }) {
+function ContextContent({
+  selectedSentence,
+  book,
+  enrichment,
+}: {
+  selectedSentence: Sentence | null;
+  book: Book;
+  enrichment: ReturnType<typeof useEnrichmentQueue>;
+}) {
   const hasEnrichment = book.characters.length > 0 || book.themes.length > 0;
+  const isActive = enrichment.phase !== "idle" && enrichment.phase !== "completed" && enrichment.phase !== "error";
 
   return (
     <div className="p-4 space-y-6">
@@ -107,10 +131,8 @@ function ContextContent({ selectedSentence, book, onUpdateBook }: { selectedSent
 
       <div className="h-px bg-border" />
 
-      {/* No enrichment notice with enrich button */}
-      {!hasEnrichment && (
-        <EnrichmentSection book={book} onUpdateBook={onUpdateBook} />
-      )}
+      {/* Enrichment section — always show for imported books */}
+      <EnrichmentSection book={book} enrichment={enrichment} />
 
       {/* Characters */}
       {book.characters.length > 0 && (
@@ -150,39 +172,77 @@ function ContextContent({ selectedSentence, book, onUpdateBook }: { selectedSent
           </div>
         </div>
       )}
+
+      {/* Chapter Progress (when enrichment is active or completed) */}
+      {enrichment.queueState && enrichment.queueState.chapters.length > 0 && (
+        <ChapterProgressSection
+          chapters={enrichment.queueState.chapters}
+          book={book}
+          phase={enrichment.phase}
+        />
+      )}
     </div>
   );
 }
 
-const PHASE_LABELS: Record<EnrichmentPhase, string> = {
-  "idle": "Ready",
+// ── Phase labels ──
+
+const PHASE_LABELS: Record<QueuePhase, string> = {
+  idle: "Ready",
   "init-llm": "Initializing AI",
-  "extracting-characters": "Finding characters",
-  "extracting-themes": "Identifying themes",
-  "annotating": "Adding annotations",
-  "done": "Complete",
-  "error": "Error",
+  "global-analysis": "Analyzing book",
+  "chapter-processing": "Enriching chapters",
+  completed: "Complete",
+  error: "Error",
 };
 
-function EnrichmentSection({ book, onUpdateBook }: { book: Book; onUpdateBook: (patch: Partial<Book>) => void }) {
-  const { phase, progress, error, llmStatus, llmProgress, enrich, cancel } = useEnrichment();
-  
-  const handleEnrich = useCallback(() => {
-    enrich(book, onUpdateBook);
-  }, [book, onUpdateBook, enrich]);
+// ── Enrichment trigger + status ──
 
-  const isEnriching = phase !== "idle" && phase !== "done" && phase !== "error";
+function EnrichmentSection({
+  book,
+  enrichment,
+}: {
+  book: Book;
+  enrichment: ReturnType<typeof useEnrichmentQueue>;
+}) {
+  const { phase, error, llmStatus, llmProgress, startEnrichment, cancel, queueState } = enrichment;
+
+  const handleEnrich = useCallback(() => {
+    startEnrichment(book);
+  }, [book, startEnrichment]);
+
+  const isProcessing = phase !== "idle" && phase !== "completed" && phase !== "error";
   const isDownloading = llmStatus === "downloading" || llmStatus === "loading";
+  const hasEnrichment = book.characters.length > 0 || book.themes.length > 0;
+
+  // Compute overall progress
+  const overallProgress = (() => {
+    if (!queueState) return 0;
+    if (phase === "init-llm") return 5;
+    if (phase === "global-analysis") return 15;
+    if (phase === "completed") return 100;
+    const chapters = queueState.chapters;
+    if (chapters.length === 0) return 0;
+    const chapterProgress = chapters.reduce((sum, ch) => {
+      if (ch.status === "completed") return sum + 100;
+      return sum + ch.annotationProgress;
+    }, 0);
+    // Global analysis = 20%, chapters = 80%
+    return Math.round(20 + (chapterProgress / chapters.length) * 0.8);
+  })();
+
+  // Don't show for sample books that already have full enrichment
+  const isSampleBook = book.id === "gatsby";
+  if (isSampleBook && phase === "idle") return null;
 
   return (
-    <div className="flex flex-col items-center text-center py-4 px-3 space-y-3">
-      <Brain className="w-6 h-6 text-primary/60 mb-1" />
-      
-      {phase === "idle" && (
+    <div className="flex flex-col items-center text-center py-3 px-3 space-y-3">
+      {phase === "idle" && !hasEnrichment && (
         <>
+          <Brain className="w-6 h-6 text-primary/60 mb-1" />
           <h4 className="text-[12px] font-medium text-foreground">Generate Intelligence</h4>
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Use on-device AI to extract characters, themes, and literary annotations from this book.
+            Use on-device AI to progressively extract characters, themes, and annotations chapter by chapter.
           </p>
           <button
             onClick={handleEnrich}
@@ -193,6 +253,16 @@ function EnrichmentSection({ book, onUpdateBook }: { book: Book; onUpdateBook: (
             <ArrowRight className="w-3 h-3" />
           </button>
         </>
+      )}
+
+      {phase === "idle" && hasEnrichment && queueState?.status === "paused" && (
+        <button
+          onClick={handleEnrich}
+          className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-[11px] text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+        >
+          <RotateCw className="w-3 h-3" />
+          Resume Enrichment
+        </button>
       )}
 
       {phase === "error" && (
@@ -211,33 +281,39 @@ function EnrichmentSection({ book, onUpdateBook }: { book: Book; onUpdateBook: (
         </>
       )}
 
-      {phase === "done" && (
+      {phase === "completed" && (
         <div className="flex items-center gap-2 text-[11px] text-primary">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Enrichment complete!</span>
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>All chapters enriched</span>
         </div>
       )}
 
-      {isEnriching && (
+      {isProcessing && (
         <>
           <div className="w-full space-y-2">
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-muted-foreground">{PHASE_LABELS[phase]}</span>
               <span className="text-muted-foreground">
-                {isDownloading ? `${llmProgress}%` : `${progress}%`}
+                {isDownloading ? `${llmProgress}%` : `${overallProgress}%`}
               </span>
             </div>
             <div className="w-full bg-muted/30 rounded-full h-1.5 overflow-hidden">
-              <div 
-                className="bg-primary h-full rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${isDownloading ? llmProgress : progress}%` }}
+              <div
+                className="bg-primary h-full rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${isDownloading ? llmProgress : overallProgress}%` }}
               />
             </div>
           </div>
-          
+
           {isDownloading && (
             <p className="text-[9px] text-muted-foreground">
               First-time model download (~350MB)
+            </p>
+          )}
+
+          {phase === "chapter-processing" && queueState && (
+            <p className="text-[9px] text-muted-foreground">
+              {queueState.chapters.filter((c) => c.status === "completed").length}/{queueState.chapters.length} chapters done · enriching in background
             </p>
           )}
 
@@ -245,13 +321,70 @@ function EnrichmentSection({ book, onUpdateBook }: { book: Book; onUpdateBook: (
             onClick={cancel}
             className="px-2.5 py-1 text-[10px] text-muted-foreground hover:text-destructive border border-border rounded hover:border-destructive/30 transition-colors"
           >
-            Cancel
+            Pause
           </button>
         </>
       )}
     </div>
   );
 }
+
+// ── Per-chapter progress indicators ──
+
+function ChapterProgressSection({
+  chapters,
+  book,
+  phase,
+}: {
+  chapters: ChapterEnrichment[];
+  book: Book;
+  phase: QueuePhase;
+}) {
+  if (phase === "idle" || phase === "init-llm") return null;
+
+  return (
+    <div>
+      <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-muted-foreground mb-3 flex items-center gap-1.5">
+        <BookOpen className="w-3 h-3" />
+        Chapter Progress
+      </p>
+      <div className="space-y-1">
+        {chapters.map((ch) => {
+          const bookChapter = book.chapters.find((c) => c.id === ch.chapterId);
+          const label = bookChapter?.title || ch.chapterId;
+
+          return (
+            <div key={ch.chapterId} className="flex items-center gap-2 py-1 px-2 rounded">
+              <ChapterStatusIcon status={ch.status} />
+              <span className="text-[10px] flex-1 truncate text-foreground/70">{label}</span>
+              {ch.status === "processing" && (
+                <span className="text-[9px] font-mono text-primary">{ch.annotationProgress}%</span>
+              )}
+              {ch.status === "completed" && (
+                <CheckCircle2 className="w-3 h-3 text-primary/60" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ChapterStatusIcon({ status }: { status: ChapterEnrichment["status"] }) {
+  switch (status) {
+    case "completed":
+      return <div className="w-1.5 h-1.5 rounded-full bg-primary" />;
+    case "processing":
+      return <Loader2 className="w-3 h-3 text-primary animate-spin" />;
+    case "error":
+      return <div className="w-1.5 h-1.5 rounded-full bg-destructive" />;
+    default:
+      return <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />;
+  }
+}
+
+// ── Persistent Chat (unchanged) ──
 
 function PersistentChat({
   book,
