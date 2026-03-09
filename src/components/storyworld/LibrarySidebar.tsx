@@ -23,7 +23,7 @@ interface LibrarySidebarProps {
   activeChapterId: string | null;
   onSelectBook: (book: Book) => void;
   onSelectChapter: (chapter: Chapter) => void;
-  onImportEpub: (file: File) => void;
+  onImportEpub: (file: File, enrich: boolean) => void;
   onDeleteBook: (bookId: string) => void;
   importing: boolean;
 }
