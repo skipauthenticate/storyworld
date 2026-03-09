@@ -30,6 +30,7 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
     setContainerWidth(pageWidth);
 
     const prevTransform = inner.style.transform;
+
     // Temporarily reset transform to measure true scrollWidth
     inner.style.transform = "none";
 
@@ -42,12 +43,12 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
     const scrollW = inner.scrollWidth;
     const pages = Math.max(1, Math.ceil(scrollW / pageWidth));
 
-    // Restore transform immediately to prevent visible jump
-    inner.style.transform = prevTransform || `translateX(-${currentPage * pageWidth}px)`;
+    // Restore previous transform (page slide will be re-applied by effect)
+    inner.style.transform = prevTransform || "translateX(0px)";
 
     setTotalPages(pages);
     setCurrentPage((prev) => Math.min(prev, pages - 1));
-  }, [enabled, currentPage]);
+  }, [enabled]);
 
   // Apply transform whenever page or width changes
   useEffect(() => {
