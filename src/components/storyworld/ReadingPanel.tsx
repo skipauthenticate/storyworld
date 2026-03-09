@@ -218,7 +218,8 @@ export function ReadingPanel({
         /* Paginated mode */
         <div
           ref={pagedOuterRef}
-          className="flex-1 overflow-hidden relative select-none px-4 sm:px-8 py-8 sm:py-12"
+          className="flex-1 relative select-none px-4 sm:px-8 py-8 sm:py-12"
+          style={{ overflow: "hidden" }}
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
           onClick={onTapZone}
@@ -228,52 +229,50 @@ export function ReadingPanel({
             className="h-full transition-transform duration-300 ease-in-out will-change-transform"
             style={{
               columnFill: "auto",
-              columnGap: "0px",
+              columnGap: "64px",
             }}
           >
-            <div className="max-w-[680px] mx-auto">
-              <h2 className="text-2xl sm:text-[28px] font-bold font-serif text-primary mb-8 tracking-wide break-after-avoid">
-                {chapter.title}
-              </h2>
+            <h2 className="text-2xl sm:text-[28px] font-bold font-serif text-primary mb-8 tracking-wide break-after-avoid">
+              {chapter.title}
+            </h2>
 
-              {chapter.scenes.map((scene, sceneIdx) => (
-                <div key={scene.id} className="mb-10">
-                  {sceneIdx > 0 && (
-                    <div className="flex items-center gap-4 my-8">
-                      <div className="flex-1 h-px bg-border" />
-                      <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-                        {scene.title}
-                      </span>
-                      <div className="flex-1 h-px bg-border" />
-                    </div>
-                  )}
-                  {sceneIdx === 0 && (
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-6">
+            {chapter.scenes.map((scene, sceneIdx) => (
+              <div key={scene.id} className="mb-10">
+                {sceneIdx > 0 && (
+                  <div className="flex items-center gap-4 my-8">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
                       {scene.title}
-                    </p>
-                  )}
-
-                  <div className={cn("text-foreground", fontSizeConfig[fontSize])}>
-                    {scene.sentences.map((sentence) => {
-                      const idx = sentenceIndexMap.get(sentence.id) ?? 0;
-                      const isActive = idx === activeSentenceIndex && isPlaying;
-                      return (
-                        <SentenceRenderer
-                          key={sentence.id}
-                          ref={isActive ? activeSentenceRef : undefined}
-                          sentence={sentence}
-                          index={idx}
-                          activeSentenceIndex={activeSentenceIndex}
-                          isPlaying={isPlaying}
-                          voiceEnabled={voiceEnabled}
-                          onSelect={onSelectSentence}
-                        />
-                      );
-                    })}
+                    </span>
+                    <div className="flex-1 h-px bg-border" />
                   </div>
+                )}
+                {sceneIdx === 0 && (
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground mb-6">
+                    {scene.title}
+                  </p>
+                )}
+
+                <div className={cn("text-foreground", fontSizeConfig[fontSize])}>
+                  {scene.sentences.map((sentence) => {
+                    const idx = sentenceIndexMap.get(sentence.id) ?? 0;
+                    const isActive = idx === activeSentenceIndex && isPlaying;
+                    return (
+                      <SentenceRenderer
+                        key={sentence.id}
+                        ref={isActive ? activeSentenceRef : undefined}
+                        sentence={sentence}
+                        index={idx}
+                        activeSentenceIndex={activeSentenceIndex}
+                        isPlaying={isPlaying}
+                        voiceEnabled={voiceEnabled}
+                        onSelect={onSelectSentence}
+                      />
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
 
           {/* Page indicator */}
