@@ -10,6 +10,7 @@ interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
   book: Book;
   onClose: () => void;
+  onUpdateBook: (patch: Partial<Book>) => void;
   className?: string;
 }
 
