@@ -37,7 +37,7 @@ export function IntelligencePanel({
 
       {/* Context content */}
       <div className={cn("overflow-y-auto transition-all", chatExpanded ? "flex-shrink-0 max-h-[35%]" : "flex-1")}>
-        <ContextContent selectedSentence={selectedSentence} book={book} />
+        <ContextContent selectedSentence={selectedSentence} book={book} onUpdateBook={onUpdateBook} />
       </div>
 
       {/* Persistent chat area */}
