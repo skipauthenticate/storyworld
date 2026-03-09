@@ -29,6 +29,8 @@ const CHARACTER_COLORS = [
 ];
 
 const ANNOTATION_BATCH_SIZE = 6;
+/** Number of batches to accumulate before flushing state updates to React + IndexedDB */
+const STATE_FLUSH_INTERVAL = 5;
 
 /** Yield to the browser's event loop so it can paint / handle input */
 const yieldToMain = (): Promise<void> => new Promise(r => setTimeout(r, 0));
@@ -92,16 +94,20 @@ export function useEnrichmentQueue(
     readingChapterRef.current = chapterId;
   }, []);
 
-  // Persist and update state atomically
+  // Persist and update state — saves to IndexedDB outside the React updater to avoid blocking renders
   const updateQueue = useCallback(
     async (updater: (prev: EnrichmentQueueState) => EnrichmentQueueState) => {
+      let nextState: EnrichmentQueueState | null = null;
       setQueueState((prev) => {
         if (!prev) return prev;
         const next = updater(prev);
-        // fire-and-forget persist
-        saveQueueState(next).catch(() => {});
+        nextState = next;
         return next;
       });
+      // Persist outside the React state updater (fire-and-forget)
+      if (nextState) {
+        saveQueueState(nextState).catch(() => {});
+      }
     },
     []
   );
@@ -114,10 +120,11 @@ export function useEnrichmentQueue(
       const sample = sampleChapters.map((ch) => extractChapterText(ch, 1200)).join("\n\n");
 
       // Characters
-      const charPrompt = `Analyze this excerpt from "${book.title}" by ${book.author}. Identify the main characters (up to 6). Return ONLY a JSON array of objects with "name" and "description" fields. Example: [{"name":"Jay Gatsby","description":"A mysterious millionaire."}]\n\nText:\n${sample}`;
-
       const charResp = await chatGenerate(
-        [{ role: "user", content: charPrompt }],
+        [
+          { role: "system", content: 'You are a literary analyst. You respond ONLY with valid JSON arrays. No other text.' },
+          { role: "user", content: `Identify up to 6 main characters from "${book.title}" by ${book.author}. Return a JSON array: [{"name":"...","description":"..."}]\n\nText:\n${sample}` },
+        ],
         { maxTokens: 400, temperature: 0.3 }
       );
       if (abortRef.current) return { characters: [], themes: [] };
@@ -142,10 +149,11 @@ export function useEnrichmentQueue(
       await yieldToMain();
 
       // Themes
-      const themePrompt = `What are the major themes in "${book.title}" by ${book.author}? Return ONLY a JSON array of short theme strings (3-6 words each), up to 6 themes. Example: ["The American Dream","Class and social mobility"]\n\nText:\n${sample.substring(0, 1500)}`;
-
       const themeResp = await chatGenerate(
-        [{ role: "user", content: themePrompt }],
+        [
+          { role: "system", content: 'You are a literary analyst. You respond ONLY with valid JSON arrays. No other text.' },
+          { role: "user", content: `What are the major themes in "${book.title}" by ${book.author}? Return a JSON array of short theme strings (3-6 words each), up to 6. Example: ["The American Dream","Class and social mobility"]\n\nText:\n${sample.substring(0, 1500)}` },
+        ],
         { maxTokens: 200, temperature: 0.3 }
       );
       if (abortRef.current) return { characters, themes: [] };
@@ -175,22 +183,28 @@ export function useEnrichmentQueue(
       const annotations = { ...existingAnnotations };
 
       let batchCount = 0;
+      const isLastBatch = (i: number) => i + ANNOTATION_BATCH_SIZE >= unannotated.length;
+
       for (let i = 0; i < unannotated.length; i += ANNOTATION_BATCH_SIZE) {
         if (abortRef.current) break;
 
-        // Yield between batches so the UI stays responsive
+        // Yield before inference so the UI stays responsive
         await yieldToMain();
 
         const batch = unannotated.slice(i, i + ANNOTATION_BATCH_SIZE);
         const sentTexts = batch.map((s, j) => `[${j}] ${s.text}`).join("\n");
 
-        const prompt = `You are a literary analyst. For each numbered sentence below from "${book.title}", write a brief annotation (1-2 sentences) about its literary significance. Return ONLY a JSON array of strings, one annotation per sentence in order.\n\n${sentTexts}`;
-
         try {
           const resp = await chatGenerate(
-            [{ role: "user", content: prompt }],
+            [
+              { role: "system", content: 'You are a literary analyst. You respond ONLY with valid JSON arrays of strings. No other text.' },
+              { role: "user", content: `For each numbered sentence below from "${book.title}", write a brief annotation (1-2 sentences) about its literary significance. Return a JSON array of strings, one per sentence.\n\n${sentTexts}` },
+            ],
             { maxTokens: 512, temperature: 0.4 }
           );
+
+          // Yield after inference to let the browser paint
+          await yieldToMain();
 
           const parsed = tryParseJSON(resp);
           if (Array.isArray(parsed)) {
@@ -207,23 +221,26 @@ export function useEnrichmentQueue(
 
         batchCount++;
 
-        // Progressive update: apply annotations so far to the book
-        const progress = Math.round(
-          ((Object.keys(annotations).length) / allSentences.length) * 100
-        );
+        // Debounce: flush state updates every STATE_FLUSH_INTERVAL batches (or on last batch)
+        // This prevents React re-render storms and excessive IndexedDB writes
+        if (batchCount % STATE_FLUSH_INTERVAL === 0 || isLastBatch(i)) {
+          const progress = Math.round(
+            ((Object.keys(annotations).length) / allSentences.length) * 100
+          );
 
-        await updateQueue((prev) => ({
-          ...prev,
-          chapters: prev.chapters.map((ch) =>
-            ch.chapterId === chapter.id
-              ? { ...ch, annotations: { ...annotations }, annotationProgress: progress }
-              : ch
-          ),
-        }));
+          await updateQueue((prev) => ({
+            ...prev,
+            chapters: prev.chapters.map((ch) =>
+              ch.chapterId === chapter.id
+                ? { ...ch, annotations: { ...annotations }, annotationProgress: progress }
+                : ch
+            ),
+          }));
 
-        // Throttle book re-renders: only apply every 2nd batch (or on last batch)
-        if (batchCount % 2 === 0 || i + ANNOTATION_BATCH_SIZE >= unannotated.length) {
           applyAnnotationsToBook(book, chapter.id, annotations, onBookUpdate);
+
+          // Yield after state flush to let React reconcile
+          await yieldToMain();
         }
       }
 
@@ -320,6 +337,9 @@ export function useEnrichmentQueue(
             ),
           }));
         }
+
+        // Yield between chapters so the UI stays responsive
+        await yieldToMain();
       }
     },
     [getNextChapter, annotateChapter, updateQueue]

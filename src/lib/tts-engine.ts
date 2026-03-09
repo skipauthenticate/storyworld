@@ -1,12 +1,14 @@
 /**
  * STORYWORLD TTS Engine
- * 
- * Uses RunAnywhere Web SDK (Piper TTS via sherpa-onnx WASM) for on-device 
+ *
+ * Uses RunAnywhere Web SDK (Piper TTS via sherpa-onnx WASM) for on-device
  * neural voice synthesis. Falls back to Web Speech API when unavailable.
  */
 
+import { getProxyUrl, fetchWithTimeout, getSDKEnvironment, DOWNLOAD_TIMEOUT_MS } from './runanywhere-common';
+
 export type TTSEngine = 'runanywhere' | 'webspeech' | 'none';
-export type VoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'webspeech';
+export type VoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'piper-en-amy' | 'webspeech';
 
 export interface VoiceOption {
   id: VoiceId;
@@ -19,6 +21,7 @@ export interface VoiceOption {
 
 export const AVAILABLE_VOICES: VoiceOption[] = [
   { id: 'piper-en-lessac', label: 'AI Voice', accent: 'US', engine: 'runanywhere', sizeHint: '~64MB' },
+  { id: 'piper-en-amy',    label: 'AI Voice', accent: 'US Alt', engine: 'runanywhere', sizeHint: '~64MB' },
   { id: 'piper-en-alba',   label: 'AI Voice', accent: 'British', engine: 'runanywhere', sizeHint: '~64MB' },
   { id: 'webspeech',       label: 'System Voice', accent: '', engine: 'webspeech' },
 ];
@@ -29,11 +32,18 @@ interface VoiceConfig {
   voiceId: string;
 }
 
-const VOICE_CONFIGS: Record<'piper-en-lessac' | 'piper-en-alba', VoiceConfig> = {
+type PiperVoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'piper-en-amy';
+
+const VOICE_CONFIGS: Record<PiperVoiceId, VoiceConfig> = {
   'piper-en-lessac': {
     archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz',
     modelDir: '/models/piper-en-lessac',
     voiceId: 'piper-en-lessac',
+  },
+  'piper-en-amy': {
+    archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-amy-medium.tar.gz',
+    modelDir: '/models/piper-en-amy',
+    voiceId: 'piper-en-amy',
   },
   'piper-en-alba': {
     archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_GB-alba-medium.tar.gz',
@@ -64,25 +74,63 @@ let sdkBooted = false; // RunAnywhere + ONNX only need to boot once
 let currentPlayer: { dispose: () => void } | null = null;
 let speakGeneration = 0;
 
-const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+// ---- Voice archive caching (IndexedDB) ----
 
-function getProxyUrl(url: string): string {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
-    console.warn('[STORYWORLD TTS] No VITE_SUPABASE_URL, using direct URL');
-    return url;
+const VOICE_DB_NAME = 'storyworld-voices';
+const VOICE_STORE_NAME = 'archives';
+let cachedVoiceDB: IDBDatabase | null = null;
+
+function openVoiceDB(): Promise<IDBDatabase> {
+  if (cachedVoiceDB) {
+    try {
+      if (cachedVoiceDB.objectStoreNames.contains(VOICE_STORE_NAME)) {
+        return Promise.resolve(cachedVoiceDB);
+      }
+    } catch {
+      cachedVoiceDB = null;
+    }
   }
-  return `${supabaseUrl}/functions/v1/cors-proxy?url=${encodeURIComponent(url)}`;
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(VOICE_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(VOICE_STORE_NAME);
+    };
+    req.onsuccess = () => {
+      cachedVoiceDB = req.result;
+      cachedVoiceDB.onclose = () => { cachedVoiceDB = null; };
+      resolve(cachedVoiceDB);
+    };
+    req.onerror = () => reject(req.error);
+  });
 }
 
-/** Helper: fetch with timeout */
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+async function getCachedVoice(voiceKey: string): Promise<Uint8Array | null> {
   try {
-    return await fetch(url, { signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
+    const db = await openVoiceDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(VOICE_STORE_NAME, 'readonly');
+      const store = tx.objectStore(VOICE_STORE_NAME);
+      const req = store.get(voiceKey);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function cacheVoice(voiceKey: string, data: Uint8Array): Promise<void> {
+  try {
+    const db = await openVoiceDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(VOICE_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(VOICE_STORE_NAME);
+      store.put(data, voiceKey);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[STORYWORLD TTS] Failed to cache voice:', err);
   }
 }
 
@@ -97,12 +145,11 @@ function findPrefix(paths: string[]): string {
 }
 
 async function bootSDK(): Promise<{ TTS: any; SherpaONNXBridge: any; extractTarGz: any }> {
-  let RunAnywhere: any, SDKEnvironment: any, extractTarGz: any;
+  let RunAnywhere: any, extractTarGz: any;
   let ONNX: any, TTS: any, SherpaONNXBridge: any;
 
   const webMod = await import('@runanywhere/web');
   RunAnywhere = webMod.RunAnywhere;
-  SDKEnvironment = webMod.SDKEnvironment;
   extractTarGz = webMod.extractTarGz;
 
   const onnxMod = await import('@runanywhere/web-onnx');
@@ -113,7 +160,8 @@ async function bootSDK(): Promise<{ TTS: any; SherpaONNXBridge: any; extractTarG
   SherpaONNXBridge.shared.wasmUrl = new URL('/assets/sherpa-onnx-glue.js', window.location.origin).href;
 
   if (!RunAnywhere.isInitialized) {
-    await RunAnywhere.initialize({ environment: SDKEnvironment.Development, debug: false });
+    const environment = await getSDKEnvironment();
+    await RunAnywhere.initialize({ environment, debug: false });
   }
   if (!ONNX.isRegistered) {
     await ONNX.register();
@@ -126,39 +174,50 @@ async function bootSDK(): Promise<{ TTS: any; SherpaONNXBridge: any; extractTarG
   return { TTS, SherpaONNXBridge, extractTarGz };
 }
 
-async function loadPiperVoice(voiceKey: 'piper-en-lessac' | 'piper-en-alba'): Promise<TTSEngine> {
+async function loadPiperVoice(voiceKey: PiperVoiceId): Promise<TTSEngine> {
   const config = VOICE_CONFIGS[voiceKey];
 
   const { TTS, SherpaONNXBridge, extractTarGz } = await bootSDK();
   const sherpa = SherpaONNXBridge.shared;
 
-  console.log(`[STORYWORLD] Downloading Piper voice "${voiceKey}" (~64MB)...`);
-  const response = await fetchWithTimeout(getProxyUrl(config.archiveUrl), DOWNLOAD_TIMEOUT_MS);
-  if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
+  // Try loading from IndexedDB cache first
+  let archiveData = await getCachedVoice(voiceKey);
 
-  let archiveData: Uint8Array;
-  if (response.body) {
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let received = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) { chunks.push(value); received += value.length; }
-      }
-    } finally {
-      try { reader.releaseLock(); } catch (_) {}
-    }
-    archiveData = new Uint8Array(received);
-    let offset = 0;
-    for (const chunk of chunks) { archiveData.set(chunk, offset); offset += chunk.length; }
-    await new Promise(r => setTimeout(r, 0));
+  if (archiveData) {
+    console.log(`[STORYWORLD] Voice "${voiceKey}" loaded from cache (${(archiveData.byteLength / 1e6).toFixed(1)}MB)`);
   } else {
-    archiveData = new Uint8Array(await response.arrayBuffer());
-  }
+    console.log(`[STORYWORLD] Downloading Piper voice "${voiceKey}" (~64MB)...`);
+    const response = await fetchWithTimeout(getProxyUrl(config.archiveUrl), DOWNLOAD_TIMEOUT_MS);
+    if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
 
-  if (archiveData.byteLength === 0) throw new Error('Downloaded empty TTS archive');
+    if (response.body) {
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) { chunks.push(value); received += value.length; }
+        }
+      } finally {
+        try { reader.releaseLock(); } catch (_) {}
+      }
+      archiveData = new Uint8Array(received);
+      let offset = 0;
+      for (const chunk of chunks) { archiveData.set(chunk, offset); offset += chunk.length; }
+      await new Promise(r => setTimeout(r, 0));
+    } else {
+      archiveData = new Uint8Array(await response.arrayBuffer());
+    }
+
+    if (archiveData.byteLength === 0) throw new Error('Downloaded empty TTS archive');
+
+    // Cache for next time (fire-and-forget)
+    cacheVoice(voiceKey, archiveData).then(() => {
+      console.log(`[STORYWORLD] Voice "${voiceKey}" cached in IndexedDB`);
+    }).catch(() => { /* caching failure is non-fatal */ });
+  }
 
   console.log(`[STORYWORLD] Extracting ${voiceKey} archive...`);
   let entries: any[];
@@ -238,7 +297,7 @@ export async function setActiveVoice(voiceId: VoiceId): Promise<TTSEngine> {
     voiceInitPromises[voiceId] = (async () => {
       ttsState.loading = true;
       try {
-        const engine = await loadPiperVoice(voiceId as 'piper-en-lessac' | 'piper-en-alba');
+        const engine = await loadPiperVoice(voiceId as PiperVoiceId);
         ttsState = { engine, initialized: true, loading: false, error: null };
         return engine;
       } catch (err) {

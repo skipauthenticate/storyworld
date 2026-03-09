@@ -30,7 +30,21 @@ const DB_NAME = "storyworld-enrichment";
 const DB_VERSION = 1;
 const STORE_NAME = "queues";
 
+let cachedDB: IDBDatabase | null = null;
+
 function openDB(): Promise<IDBDatabase> {
+  // Reuse cached connection if still open
+  if (cachedDB) {
+    try {
+      // Test if connection is still valid by checking objectStoreNames
+      if (cachedDB.objectStoreNames.contains(STORE_NAME)) {
+        return Promise.resolve(cachedDB);
+      }
+    } catch {
+      cachedDB = null;
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
@@ -39,7 +53,12 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_NAME, { keyPath: "bookId" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      cachedDB = req.result;
+      cachedDB.onclose = () => { cachedDB = null; };
+      cachedDB.onerror = () => { cachedDB = null; };
+      resolve(cachedDB);
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -53,7 +72,6 @@ export async function loadQueueState(bookId: string): Promise<EnrichmentQueueSta
       const req = store.get(bookId);
       req.onsuccess = () => resolve(req.result ?? null);
       req.onerror = () => reject(req.error);
-      tx.oncomplete = () => db.close();
     });
   } catch {
     return null;
@@ -67,8 +85,8 @@ export async function saveQueueState(state: EnrichmentQueueState): Promise<void>
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       store.put({ ...state, updatedAt: Date.now() });
-      tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
   } catch (err) {
     console.warn("[EnrichmentStorage] Save failed:", err);
@@ -82,8 +100,8 @@ export async function deleteQueueState(bookId: string): Promise<void> {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       store.delete(bookId);
-      tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
   } catch {
     // non-fatal
