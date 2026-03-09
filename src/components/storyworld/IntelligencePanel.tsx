@@ -407,7 +407,21 @@ function PersistentChat({
     }
   }, [messages]);
 
-  const systemPrompt = `You are a literary analysis AI assistant embedded in a reading app called Storyworld. You are currently helping the reader analyze "${book.title}" by ${book.author}.${book.themes.length > 0 ? ` The book's themes include: ${book.themes.join(', ')}.` : ''}${book.characters.length > 0 ? ` Characters include: ${book.characters.map(c => `${c.name} (${c.description})`).join('; ')}.` : ''} ${selectedSentence ? `The reader has selected this passage: "${selectedSentence.text}"` : ''} Provide insightful, concise literary analysis. Keep responses under 150 words.`;
+  const passageContext = (() => {
+    if (!currentChapter) return '';
+    const allSentences = currentChapter.scenes.flatMap(s => s.sentences);
+    if (allSentences.length === 0) return '';
+    const start = Math.max(0, activeSentenceIndex - 5);
+    const end = Math.min(allSentences.length, activeSentenceIndex + 5);
+    const window = allSentences.slice(start, end);
+    return window.map((s, i) => {
+      const globalIdx = start + i;
+      const marker = globalIdx === activeSentenceIndex ? '>>>' : '   ';
+      return `${marker} ${s.text}`;
+    }).join('\n');
+  })();
+
+  const systemPrompt = `You are a literary analysis AI assistant embedded in a reading app called Storyworld. You are currently helping the reader analyze "${book.title}" by ${book.author}.${currentChapter ? `\nCurrent chapter: "${currentChapter.title}"` : ''}${passageContext ? `\n\nThe reader is currently seeing this passage:\n---\n${passageContext}\n---\n(>>> marks the sentence the reader is currently on)` : ''}${selectedSentence ? `\n\nThe reader has highlighted: "${selectedSentence.text}"` : ''}${book.themes.length > 0 ? `\nThemes: ${book.themes.join(', ')}.` : ''}${book.characters.length > 0 ? `\nCharacters: ${book.characters.map(c => `${c.name} (${c.description})`).join('; ')}.` : ''}\n\nProvide insightful, concise literary analysis. Keep responses under 150 words.`;
 
   const handleSend = async () => {
     if (!input.trim() || isGenerating) return;
