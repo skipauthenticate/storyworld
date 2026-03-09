@@ -35,6 +35,8 @@ export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProp
     const isActive = index === activeSentenceIndex && isPlaying;
     const showHighlight = voiceEnabled && isActive;
 
+    const hasAnnotation = !!sentence.annotation;
+
     return (
       <span
         ref={ref}
@@ -45,9 +47,11 @@ export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProp
           showHighlight && getHighlightClass(sentence),
           isActive && "animate-sentence-glow",
           !isActive && "hover:bg-muted/30",
+          !isActive && hasAnnotation && "border-b border-dotted border-primary/20",
           sentence.type === "dialogue" && "italic"
         )}
         onClick={() => onSelect(sentence)}
+        title={hasAnnotation ? "Annotated — click to view" : undefined}
       >
         {sentence.text}{" "}
       </span>
