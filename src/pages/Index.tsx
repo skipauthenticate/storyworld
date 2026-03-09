@@ -28,6 +28,11 @@ function loadFontSize(): FontSize {
 
 const Index = () => {
   const { books, addBook, removeBook, updateBook } = useBookLibrary();
+
+  const handleBookUpdate = useCallback((bookId: string, patch: Partial<Book>) => {
+    updateBook(bookId, patch);
+  }, [updateBook]);
+
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
