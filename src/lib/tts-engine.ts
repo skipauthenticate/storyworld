@@ -96,7 +96,30 @@ export async function initTTS(): Promise<TTSEngine> {
       console.log('[STORYWORLD] Downloading Piper TTS archive (~75MB)...');
       const response = await fetchWithTimeout(getProxyUrl(TTS_ARCHIVE_URL), DOWNLOAD_TIMEOUT_MS);
       if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
-      const archiveData = new Uint8Array(await response.arrayBuffer());
+
+      // Stream download to avoid blocking main thread with response.arrayBuffer()
+      let archiveData: Uint8Array;
+      if (response.body) {
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) { chunks.push(value); received += value.length; }
+          }
+        } finally {
+          try { reader.releaseLock(); } catch (_) {}
+        }
+        archiveData = new Uint8Array(received);
+        let offset = 0;
+        for (const chunk of chunks) { archiveData.set(chunk, offset); offset += chunk.length; }
+        // Yield to main thread after heavy memory work
+        await new Promise(r => setTimeout(r, 0));
+      } else {
+        archiveData = new Uint8Array(await response.arrayBuffer());
+      }
       console.log(`[STORYWORLD] Archive downloaded: ${(archiveData.byteLength / 1e6).toFixed(1)}MB`);
 
       if (archiveData.byteLength === 0) throw new Error('Downloaded empty TTS archive');

@@ -178,6 +178,7 @@ ${sample.substring(0, 1500)}`;
 
         // 4. Annotate first chapter sentences (batch of first ~8 sentences)
         setState((prev) => ({ ...prev, phase: "annotating", progress: 70 }));
+        await yieldToMain();
         if (abortRef.current) return;
 
         const firstChapter = book.chapters[0];

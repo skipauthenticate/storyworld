@@ -272,6 +272,9 @@ export function useEnrichmentQueue(
         const next = getNextChapter(currentQueue!, book);
         if (!next) break;
 
+        // Yield between chapters
+        await yieldToMain();
+
         const chapter = book.chapters.find((c) => c.id === next.chapterId);
         if (!chapter) {
           // Mark as error and continue
