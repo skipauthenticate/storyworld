@@ -33,7 +33,8 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(0);
   const [ttsEngine, setTtsEngine] = useState<TTSEngine>('none');
   const [ttsLoading, setTtsLoading] = useState(false);
-  const [speed, setSpeed] = useState(initialSpeed);
+  const [speed, setSpeedState] = useState(initialSpeed);
+  const speedRef = useRef(initialSpeed);
 
   const playingRef = useRef(false);
   const indexRef = useRef(0);
@@ -111,10 +112,11 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
       }
     };
 
-    // Use TTS if voice is enabled and available, otherwise timer-based
+    const currentSpeed = speedRef.current;
+
     if (voiceEnabledRef.current && ttsEngineRef.current !== 'none') {
       try {
-        await speakSentence(sentence.text, { speed, onEnd: advance });
+        await speakSentence(sentence.text, { speed: currentSpeed, onEnd: advance });
       } catch (err) {
         console.warn('[Narration] TTS error at index', idx, err);
         if (playingRef.current) {
@@ -122,11 +124,10 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
         }
       }
     } else {
-      // Timer-based sentence advance
-      const ms = estimateReadingMs(sentence.text, speed);
+      const ms = estimateReadingMs(sentence.text, currentSpeed);
       timerRef.current = setTimeout(advance, ms);
     }
-  }, [speed]);
+  }, []);
 
   const togglePlay = useCallback(() => {
     if (isPlaying) {
@@ -193,7 +194,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
     goToNext,
     goToPrevious,
     goToSentence,
-    setSpeed: (s: number) => setSpeed(s),
+    setSpeed: (s: number) => { speedRef.current = s; setSpeedState(s); },
     reset,
   };
 }

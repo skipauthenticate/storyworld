@@ -23,6 +23,7 @@ let ttsState: TTSState = {
 
 let initPromise: Promise<TTSEngine> | null = null;
 let currentPlayer: { dispose: () => void } | null = null;
+let speakGeneration = 0;
 
 const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz';
 const MODEL_DIR = '/models/piper-en-lessac';
@@ -195,6 +196,7 @@ export async function speakSentence(
   options: { speed?: number; onEnd?: () => void } = {}
 ): Promise<void> {
   const { speed = 1.0, onEnd } = options;
+  const thisGen = ++speakGeneration;
 
   try {
     if (!ttsState.initialized) await initTTS();
@@ -205,25 +207,27 @@ export async function speakSentence(
   }
 
   try {
-    stopSpeaking();
+    stopSpeakingInternal();
   } catch (_) { /* ignore stop errors */ }
+
+  if (thisGen !== speakGeneration) { onEnd?.(); return; }
 
   if (ttsState.engine === 'runanywhere') {
     try {
       const { TTS, AudioPlayback } = await import('@runanywhere/web-onnx');
+      if (thisGen !== speakGeneration) { onEnd?.(); return; }
       const result = await TTS.synthesize(text, { speed });
+      if (thisGen !== speakGeneration) { onEnd?.(); return; }
       const player = new AudioPlayback();
       currentPlayer = player;
       
       try {
         await player.play(result.audioData, result.sampleRate);
       } catch (playErr: any) {
-        // Handle autoplay policy blocking
         if (playErr?.name === 'NotAllowedError') {
           console.warn('[STORYWORLD] Autoplay blocked — user gesture required');
           currentPlayer = null;
           try { player.dispose(); } catch (_) {}
-          // Fall back to Web Speech which is more lenient
           speakWithWebSpeech(text, speed, onEnd);
           return;
         }
@@ -232,11 +236,11 @@ export async function speakSentence(
       
       currentPlayer = null;
       try { player.dispose(); } catch (_) {}
-      onEnd?.();
+      if (thisGen === speakGeneration) onEnd?.();
     } catch (err) {
       console.error('[STORYWORLD] Synthesis error, falling back:', err);
       currentPlayer = null;
-      speakWithWebSpeech(text, speed, onEnd);
+      if (thisGen === speakGeneration) speakWithWebSpeech(text, speed, onEnd);
     }
   } else if (ttsState.engine === 'webspeech') {
     speakWithWebSpeech(text, speed, onEnd);
@@ -256,8 +260,22 @@ function speakWithWebSpeech(text: string, speed: number, onEnd?: () => void) {
       (v) => v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Google US'))
     ) || voices.find((v) => v.lang.startsWith('en') && v.localService);
     if (preferred) utterance.voice = preferred;
-    utterance.onend = () => onEnd?.();
-    utterance.onerror = () => onEnd?.();
+
+    let ended = false;
+    const finish = () => {
+      if (ended) return;
+      ended = true;
+      clearTimeout(watchdog);
+      onEnd?.();
+    };
+
+    // Watchdog: Chrome sometimes never fires onend for long utterances
+    const words = text.split(/\s+/).length;
+    const estimatedSec = (words / (150 * Math.max(speed, 0.5))) * 60;
+    const watchdog = setTimeout(finish, (estimatedSec + 5) * 1000);
+
+    utterance.onend = finish;
+    utterance.onerror = finish;
     speechSynthesis.speak(utterance);
   } catch (err) {
     console.warn('[STORYWORLD] Web Speech speak failed:', err);
@@ -265,18 +283,19 @@ function speakWithWebSpeech(text: string, speed: number, onEnd?: () => void) {
   }
 }
 
-export function stopSpeaking() {
-  // Stop RunAnywhere AudioPlayback
+function stopSpeakingInternal() {
   if (currentPlayer) {
-    try {
-      currentPlayer.dispose();
-    } catch (_) {}
+    try { currentPlayer.dispose(); } catch (_) {}
     currentPlayer = null;
   }
-  // Stop Web Speech API
   try {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
   } catch (_) {}
+}
+
+export function stopSpeaking() {
+  speakGeneration++;
+  stopSpeakingInternal();
 }
 
 export function getTTSState(): TTSState {
