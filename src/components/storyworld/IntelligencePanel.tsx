@@ -222,9 +222,9 @@ function EnrichmentSection({
   return (
     <div className="flex flex-col items-center text-center py-3 px-3 space-y-3">
       {phase === "idle" && !hasEnrichment && (
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-          <Clock className="w-3.5 h-3.5" />
-          <span>Waiting for enrichment…</span>
+        <div className="flex flex-col items-center gap-2 py-2">
+          <Loader2 className="w-5 h-5 text-muted-foreground/40 animate-spin" />
+          <span className="text-[11px] text-muted-foreground">Preparing enrichment…</span>
         </div>
       )}
 
