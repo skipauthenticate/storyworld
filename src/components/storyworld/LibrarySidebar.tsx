@@ -41,6 +41,7 @@ function SidebarContent({
 }: LibrarySidebarProps & { onItemClick?: () => void }) {
   const [expandedBook, setExpandedBook] = useState<string | null>(activeBook?.id ?? null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [enrichOnImport, setEnrichOnImport] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
