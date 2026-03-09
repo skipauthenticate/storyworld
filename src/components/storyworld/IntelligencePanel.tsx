@@ -195,7 +195,7 @@ function EnrichmentSection({
   enrichment,
 }: {
   book: Book;
-  enrichment: ReturnType<typeof useEnrichmentQueue>;
+  enrichment: EnrichmentQueueHook;
 }) {
   const { phase, error, llmStatus, llmProgress, startEnrichment, cancel, queueState } = enrichment;
 
