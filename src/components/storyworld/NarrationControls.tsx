@@ -76,12 +76,20 @@ export function NarrationControls({
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:text-foreground"
             )}
-            title="Toggle voice narration"
+            title={`Toggle voice narration (${ttsEngine === 'runanywhere' ? 'AI · Piper' : ttsEngine === 'webspeech' ? 'Browser' : 'Off'})`}
             aria-label={voiceEnabled ? "Disable voice narration" : "Enable voice narration"}
             aria-pressed={voiceEnabled}
           >
-            {voiceEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">Voice</span>
+            {ttsLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : voiceEnabled ? (
+              <Volume2 className="w-3.5 h-3.5" />
+            ) : (
+              <VolumeX className="w-3.5 h-3.5" />
+            )}
+            <span className="hidden sm:inline">
+              {ttsEngine === 'runanywhere' ? 'AI Voice' : ttsEngine === 'webspeech' ? 'Browser' : 'Voice'}
+            </span>
           </button>
           <button
             onClick={onToggleIntelligence}
