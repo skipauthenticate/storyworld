@@ -376,11 +376,15 @@ function PersistentChat({
   selectedSentence,
   expanded,
   onToggleExpand,
+  currentChapter,
+  activeSentenceIndex,
 }: {
   book: Book;
   selectedSentence: Sentence | null;
   expanded: boolean;
   onToggleExpand: () => void;
+  currentChapter: Chapter | null;
+  activeSentenceIndex: number;
 }) {
   const {
     messages,
