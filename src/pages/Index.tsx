@@ -99,10 +99,12 @@ const Index = () => {
     goToPrevious,
     goToSentence,
     setSpeed: setNarrationSpeed,
+    setVoice: setTtsVoice,
   } = useNarration({
     sentences: allSentences,
     speed,
     voiceEnabled,
+    voiceId,
     onChapterEnd: handleChapterEnd,
   });
 
