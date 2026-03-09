@@ -1,5 +1,5 @@
 import { Book, Chapter } from "@/data/sampleBooks";
-import { BookOpen, ChevronRight, Menu, Plus, Trash2 } from "lucide-react";
+import { BookOpen, ChevronRight, Menu, Plus, Trash2, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef } from "react";
@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { SettingsDialog } from "./SettingsDialog";
 
 interface LibrarySidebarProps {
   books: Book[];
@@ -45,19 +46,34 @@ function SidebarContent({
   const [expandedBook, setExpandedBook] = useState<string | null>(activeBook?.id ?? null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [enrichOnImport, setEnrichOnImport] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-border">
-        <h1 className="text-lg font-bold tracking-wide text-primary font-serif">
-          STORYWORLD
-        </h1>
-        <p className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground mt-0.5">
-          Where text comes alive
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-lg font-bold tracking-wide text-primary font-serif">
+              STORYWORLD
+            </h1>
+            <p className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground mt-0.5">
+              Where text comes alive
+            </p>
+          </div>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors mt-0.5"
+            title="Settings"
+            aria-label="Open settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* Library */}
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Book library">
