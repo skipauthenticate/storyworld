@@ -23,6 +23,7 @@ let ttsState: TTSState = {
 
 let initPromise: Promise<TTSEngine> | null = null;
 let currentPlayer: { dispose: () => void } | null = null;
+let speakGeneration = 0;
 
 const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz';
 const MODEL_DIR = '/models/piper-en-lessac';
