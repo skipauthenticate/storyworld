@@ -318,6 +318,8 @@ const Index = () => {
               onPrevChapter={handlePrevChapter}
               onNextChapter={handleNextChapter}
               onFontSizeChange={handleFontSizeChange}
+              readingMode={readingMode}
+              onReadingModeChange={handleReadingModeChange}
             />
             <NarrationControls
               isPlaying={isPlaying}
