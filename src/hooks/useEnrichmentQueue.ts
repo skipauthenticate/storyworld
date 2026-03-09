@@ -174,8 +174,12 @@ export function useEnrichmentQueue(
 
       const annotations = { ...existingAnnotations };
 
+      let batchCount = 0;
       for (let i = 0; i < unannotated.length; i += ANNOTATION_BATCH_SIZE) {
         if (abortRef.current) break;
+
+        // Yield between batches so the UI stays responsive
+        await yieldToMain();
 
         const batch = unannotated.slice(i, i + ANNOTATION_BATCH_SIZE);
         const sentTexts = batch.map((s, j) => `[${j}] ${s.text}`).join("\n");
