@@ -260,8 +260,22 @@ function speakWithWebSpeech(text: string, speed: number, onEnd?: () => void) {
       (v) => v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Google US'))
     ) || voices.find((v) => v.lang.startsWith('en') && v.localService);
     if (preferred) utterance.voice = preferred;
-    utterance.onend = () => onEnd?.();
-    utterance.onerror = () => onEnd?.();
+
+    let ended = false;
+    const finish = () => {
+      if (ended) return;
+      ended = true;
+      clearTimeout(watchdog);
+      onEnd?.();
+    };
+
+    // Watchdog: Chrome sometimes never fires onend for long utterances
+    const words = text.split(/\s+/).length;
+    const estimatedSec = (words / (150 * Math.max(speed, 0.5))) * 60;
+    const watchdog = setTimeout(finish, (estimatedSec + 5) * 1000);
+
+    utterance.onend = finish;
+    utterance.onerror = finish;
     speechSynthesis.speak(utterance);
   } catch (err) {
     console.warn('[STORYWORLD] Web Speech speak failed:', err);
