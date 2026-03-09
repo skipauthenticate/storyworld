@@ -283,18 +283,19 @@ function speakWithWebSpeech(text: string, speed: number, onEnd?: () => void) {
   }
 }
 
-export function stopSpeaking() {
-  // Stop RunAnywhere AudioPlayback
+function stopSpeakingInternal() {
   if (currentPlayer) {
-    try {
-      currentPlayer.dispose();
-    } catch (_) {}
+    try { currentPlayer.dispose(); } catch (_) {}
     currentPlayer = null;
   }
-  // Stop Web Speech API
   try {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
   } catch (_) {}
+}
+
+export function stopSpeaking() {
+  speakGeneration++;
+  stopSpeakingInternal();
 }
 
 export function getTTSState(): TTSState {

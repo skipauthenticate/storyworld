@@ -194,7 +194,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
     goToNext,
     goToPrevious,
     goToSentence,
-    setSpeed: (s: number) => setSpeed(s),
+    setSpeed: (s: number) => { speedRef.current = s; setSpeedState(s); },
     reset,
   };
 }
