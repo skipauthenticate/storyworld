@@ -31,9 +31,23 @@ const CHARACTER_COLORS = [
 const ANNOTATION_BATCH_SIZE = 6;
 /** Number of batches to accumulate before flushing state updates to React + IndexedDB */
 const STATE_FLUSH_INTERVAL = 5;
+/** Max time to wait for a single LLM generation before timing out */
+const GENERATION_TIMEOUT_MS = 60_000;
 
 /** Yield to the browser's event loop so it can paint / handle input */
 const yieldToMain = (): Promise<void> => new Promise(r => setTimeout(r, 0));
+
+/** Wrap chatGenerate with a timeout to prevent indefinite hangs from WASM LLM */
+async function chatGenerateWithTimeout(
+  ...args: Parameters<typeof chatGenerate>
+): ReturnType<typeof chatGenerate> {
+  return Promise.race([
+    chatGenerate(...args),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('LLM generation timed out')), GENERATION_TIMEOUT_MS)
+    ),
+  ]);
+}
 
 // ── Helpers ──
 
@@ -119,49 +133,57 @@ export function useEnrichmentQueue(
       const sampleChapters = book.chapters.slice(0, 3);
       const sample = sampleChapters.map((ch) => extractChapterText(ch, 1200)).join("\n\n");
 
-      // Characters
-      const charResp = await chatGenerate(
-        [
-          { role: "system", content: 'You are a literary analyst. You respond ONLY with valid JSON arrays. No other text.' },
-          { role: "user", content: `Identify up to 6 main characters from "${book.title}" by ${book.author}. Return a JSON array: [{"name":"...","description":"..."}]\n\nText:\n${sample}` },
-        ],
-        { maxTokens: 400, temperature: 0.3 }
-      );
-      if (abortRef.current) return { characters: [], themes: [] };
-
+      // Characters — wrapped in try/catch so a timeout doesn't abort the whole enrichment
       let characters: Character[] = [];
-      const charData = tryParseJSON(charResp);
-      if (Array.isArray(charData)) {
-        characters = charData
-          .filter((c: any) => c?.name && typeof c.name === "string")
-          .slice(0, 6)
-          .map((c: any, i: number) => ({
-            id: `char-${i}-${Date.now()}`,
-            name: String(c.name).trim(),
-            description: String(c.description || "").trim(),
-            color: CHARACTER_COLORS[i % CHARACTER_COLORS.length],
-            appearances: [],
-          }));
+      try {
+        const charResp = await chatGenerateWithTimeout(
+          [
+            { role: "system", content: 'You are a literary analyst. You respond ONLY with valid JSON arrays. No other text.' },
+            { role: "user", content: `Identify up to 6 main characters from "${book.title}" by ${book.author}. Return a JSON array: [{"name":"...","description":"..."}]\n\nText:\n${sample}` },
+          ],
+          { maxTokens: 400, temperature: 0.3 }
+        );
+        if (abortRef.current) return { characters: [], themes: [] };
+
+        const charData = tryParseJSON(charResp);
+        if (Array.isArray(charData)) {
+          characters = charData
+            .filter((c: any) => c?.name && typeof c.name === "string")
+            .slice(0, 6)
+            .map((c: any, i: number) => ({
+              id: `char-${i}-${Date.now()}`,
+              name: String(c.name).trim(),
+              description: String(c.description || "").trim(),
+              color: CHARACTER_COLORS[i % CHARACTER_COLORS.length],
+              appearances: [],
+            }));
+        }
+      } catch (err) {
+        console.warn("[EnrichmentQueue] Character extraction failed (continuing):", err);
       }
 
       if (abortRef.current) return { characters, themes: [] };
 
       await yieldToMain();
 
-      // Themes
-      const themeResp = await chatGenerate(
-        [
-          { role: "system", content: 'You are a literary analyst. You respond ONLY with valid JSON arrays. No other text.' },
-          { role: "user", content: `What are the major themes in "${book.title}" by ${book.author}? Return a JSON array of short theme strings (3-6 words each), up to 6. Example: ["The American Dream","Class and social mobility"]\n\nText:\n${sample.substring(0, 1500)}` },
-        ],
-        { maxTokens: 200, temperature: 0.3 }
-      );
-      if (abortRef.current) return { characters, themes: [] };
-
+      // Themes — also wrapped so failure doesn't block chapter processing
       let themes: string[] = [];
-      const themeData = tryParseJSON(themeResp);
-      if (Array.isArray(themeData)) {
-        themes = themeData.filter((t: any) => typeof t === "string").slice(0, 6).map((t: string) => t.trim());
+      try {
+        const themeResp = await chatGenerateWithTimeout(
+          [
+            { role: "system", content: 'You are a literary analyst. You respond ONLY with valid JSON arrays. No other text.' },
+            { role: "user", content: `What are the major themes in "${book.title}" by ${book.author}? Return a JSON array of short theme strings (3-6 words each), up to 6. Example: ["The American Dream","Class and social mobility"]\n\nText:\n${sample.substring(0, 1500)}` },
+          ],
+          { maxTokens: 200, temperature: 0.3 }
+        );
+        if (abortRef.current) return { characters, themes: [] };
+
+        const themeData = tryParseJSON(themeResp);
+        if (Array.isArray(themeData)) {
+          themes = themeData.filter((t: any) => typeof t === "string").slice(0, 6).map((t: string) => t.trim());
+        }
+      } catch (err) {
+        console.warn("[EnrichmentQueue] Theme extraction failed (continuing):", err);
       }
 
       return { characters, themes };
@@ -195,7 +217,7 @@ export function useEnrichmentQueue(
         const sentTexts = batch.map((s, j) => `[${j}] ${s.text}`).join("\n");
 
         try {
-          const resp = await chatGenerate(
+          const resp = await chatGenerateWithTimeout(
             [
               { role: "system", content: 'You are a literary analyst. You respond ONLY with valid JSON arrays of strings. No other text.' },
               { role: "user", content: `For each numbered sentence below from "${book.title}", write a brief annotation (1-2 sentences) about its literary significance. Return a JSON array of strings, one per sentence.\n\n${sentTexts}` },
