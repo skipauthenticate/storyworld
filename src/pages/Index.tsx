@@ -361,6 +361,8 @@ const Index = () => {
           onClose={() => setIntelligenceEnabled(false)}
           enrichment={enrichment}
           currentChapterId={activeChapter?.id ?? null}
+          currentChapter={activeChapter}
+          activeSentenceIndex={activeSentenceIndex}
         />
       )}
 
