@@ -265,10 +265,11 @@ const Index = () => {
             handleTogglePlay();
             break;
           case "ArrowLeft":
-            goToPrevious();
+            // In page mode, arrow keys are handled by the paged reader tap/keyboard
+            if (readingMode === "scroll") goToPrevious();
             break;
           case "ArrowRight":
-            goToNext();
+            if (readingMode === "scroll") goToNext();
             break;
         }
       } catch (err) {
