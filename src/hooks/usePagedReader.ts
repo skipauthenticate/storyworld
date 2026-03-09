@@ -127,9 +127,25 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
     }
   }, [enabled, nextPage, prevPage]);
 
-  // Tap zones
+  // Tap zones (ignore taps on interactive content like sentences/buttons)
   const onTapZone = useCallback((e: React.MouseEvent) => {
     if (!enabled) return;
+
+    try {
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const interactive = target.closest(
+          "button, a, input, textarea, select, [role='button'], [data-sentence='true'], [data-no-pager-tap='true']"
+        );
+        if (interactive) return;
+
+        const selected = window.getSelection?.()?.toString?.() ?? "";
+        if (selected.trim().length > 0) return;
+      }
+    } catch {
+      // ignore
+    }
+
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX - rect.left;
     const ratio = x / rect.width;

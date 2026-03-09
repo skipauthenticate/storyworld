@@ -40,6 +40,7 @@ export const SentenceRenderer = forwardRef<HTMLSpanElement, SentenceRendererProp
     return (
       <span
         ref={ref}
+        data-sentence="true"
         aria-current={isActive ? "true" : undefined}
         className={cn(
           "cursor-pointer transition-all duration-400 rounded-sm px-0.5 -mx-0.5 inline",
