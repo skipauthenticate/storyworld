@@ -51,7 +51,7 @@ export function IntelligencePanel({
   );
 }
 
-function ContextContent({ selectedSentence, book }: { selectedSentence: Sentence | null; book: Book }) {
+function ContextContent({ selectedSentence, book, onUpdateBook }: { selectedSentence: Sentence | null; book: Book; onUpdateBook: (patch: Partial<Book>) => void }) {
   const hasEnrichment = book.characters.length > 0 || book.themes.length > 0;
 
   return (
