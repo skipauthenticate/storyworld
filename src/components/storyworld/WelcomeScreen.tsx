@@ -2,11 +2,12 @@ import { Book } from "@/data/sampleBooks";
 import { BookOpen, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { ThemeToggle } from "./ThemeToggle";
+import { Switch } from "@/components/ui/switch";
 
 interface WelcomeScreenProps {
   books: Book[];
   onSelectBook: (book: Book) => void;
-  onImportEpub: (file: File) => void;
+  onImportEpub: (file: File, enrich: boolean) => void;
   importing: boolean;
 }
 
@@ -14,10 +15,11 @@ export function WelcomeScreen({ books, onSelectBook, onImportEpub, importing }: 
   const availableBooks = books.filter(b => b.chapters.length > 0);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [enrichOnImport, setEnrichOnImport] = useState(true);
 
   const handleFile = (file: File) => {
     if (file.name.toLowerCase().endsWith(".epub")) {
-      onImportEpub(file);
+      onImportEpub(file, enrichOnImport);
     }
   };
 
