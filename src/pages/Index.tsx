@@ -158,6 +158,11 @@ const Index = () => {
     try { localStorage.setItem(FONT_SIZE_KEY, size); } catch {}
   }, []);
 
+  const handleReadingModeChange = useCallback((mode: ReadingMode) => {
+    setReadingMode(mode);
+    try { localStorage.setItem(READING_MODE_KEY, mode); } catch {}
+  }, []);
+
   const bookProgress = useMemo(() => {
     if (!activeBook || !activeChapter) return 0;
     let total = 0;
