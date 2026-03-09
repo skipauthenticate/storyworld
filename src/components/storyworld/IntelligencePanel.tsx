@@ -24,6 +24,8 @@ export function IntelligencePanel({
   onClose,
   enrichment,
   currentChapterId,
+  currentChapter,
+  activeSentenceIndex,
   className,
 }: IntelligencePanelProps) {
   const [chatExpanded, setChatExpanded] = useState(false);
