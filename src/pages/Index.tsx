@@ -145,6 +145,10 @@ const Index = () => {
           if (progress.sentenceIndex > 0) {
             pendingSentenceRef.current = progress.sentenceIndex;
           }
+          // Auto-resume enrichment if book has no characters/themes yet
+          if (book.characters.length === 0 && book.themes.length === 0 && book.id !== "gatsby") {
+            enrichment.startEnrichment(book);
+          }
         }
       }
     } catch (err) {
