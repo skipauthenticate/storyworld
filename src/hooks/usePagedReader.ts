@@ -24,28 +24,30 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
     const padL = Number.parseFloat(cs.paddingLeft || "0") || 0;
     const padR = Number.parseFloat(cs.paddingRight || "0") || 0;
 
-    // Use the content box width as the page width (avoids edge clipping)
+    // Content-box width = one page of visible text
     const pageWidth = outer.clientWidth - padL - padR;
     if (pageWidth <= 0) return;
-    setContainerWidth(pageWidth);
 
     const prevTransform = inner.style.transform;
-
-    // Temporarily reset transform to measure true scrollWidth
     inner.style.transform = "none";
-
-    // Force exact column width so each column === one page
     inner.style.columnWidth = `${pageWidth}px`;
 
     // Force reflow then measure
     void inner.offsetHeight;
 
-    const scrollW = inner.scrollWidth;
-    const pages = Math.max(1, Math.ceil(scrollW / pageWidth));
+    // Read the computed column gap (could be set via CSS)
+    const innerCs = window.getComputedStyle(inner);
+    const gap = Number.parseFloat(innerCs.columnGap || "0") || 0;
 
-    // Restore previous transform (page slide will be re-applied by effect)
+    const scrollW = inner.scrollWidth;
+    // Each column slot = pageWidth + gap, except the last which has no trailing gap
+    const slotWidth = pageWidth + gap;
+    const pages = Math.max(1, Math.round((scrollW + gap) / slotWidth));
+
     inner.style.transform = prevTransform || "translateX(0px)";
 
+    // Store the slot width (page + gap) as the amount to translate per page
+    setContainerWidth(slotWidth);
     setTotalPages(pages);
     setCurrentPage((prev) => Math.min(prev, pages - 1));
   }, [enabled]);
