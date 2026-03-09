@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { initTTS, speakSentence, stopSpeaking, type TTSEngine } from '@/lib/tts-engine';
+import { initTTS, speakSentence, stopSpeaking, setActiveVoice, type TTSEngine, type VoiceId } from '@/lib/tts-engine';
 import { Sentence } from '@/data/sampleBooks';
 
 interface UseNarrationOptions {
   sentences: Sentence[];
   speed: number;
   voiceEnabled: boolean;
+  voiceId?: VoiceId;
   onChapterEnd?: () => void;
 }
 
@@ -19,6 +20,7 @@ interface UseNarrationReturn {
   goToPrevious: () => void;
   goToSentence: (index: number) => void;
   setSpeed: (speed: number) => void;
+  setVoice: (id: VoiceId) => Promise<void>;
   reset: () => void;
 }
 
@@ -28,7 +30,7 @@ function estimateReadingMs(text: string, speed: number): number {
   return Math.max(800, (words / wpm) * 60000);
 }
 
-export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onChapterEnd }: UseNarrationOptions): UseNarrationReturn {
+export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, voiceId = 'piper-en-lessac', onChapterEnd }: UseNarrationOptions): UseNarrationReturn {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(0);
   const [ttsEngine, setTtsEngine] = useState<TTSEngine>('none');
@@ -72,17 +74,17 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
     }
   }, [sentences, clearTimer]);
 
-  // Initialize TTS
+  // Initialize TTS with the selected voice
   useEffect(() => {
     setTtsLoading(true);
-    initTTS()
+    initTTS(voiceId)
       .then((engine) => setTtsEngine(engine))
       .catch((err) => {
         console.warn('[Narration] TTS init failed:', err);
         setTtsEngine('none');
       })
       .finally(() => setTtsLoading(false));
-  }, []);
+  }, [voiceId]);
 
   const speakCurrent = useCallback(async (idx: number) => {
     if (idx >= sentencesRef.current.length || !playingRef.current) {
@@ -177,6 +179,25 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
     indexRef.current = 0;
   }, [clearTimer]);
 
+  const setVoice = useCallback(async (id: VoiceId) => {
+    // Stop any current speech
+    try { stopSpeaking(); } catch (_) {}
+    clearTimer();
+    if (playingRef.current) {
+      setIsPlaying(false);
+      playingRef.current = false;
+    }
+    setTtsLoading(true);
+    try {
+      const engine = await setActiveVoice(id);
+      setTtsEngine(engine);
+    } catch (err) {
+      console.warn('[Narration] Failed to switch voice:', err);
+    } finally {
+      setTtsLoading(false);
+    }
+  }, [clearTimer]);
+
   useEffect(() => {
     return () => {
       try { stopSpeaking(); } catch (_) {}
@@ -195,6 +216,7 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
     goToPrevious,
     goToSentence,
     setSpeed: (s: number) => { speedRef.current = s; setSpeedState(s); },
+    setVoice,
     reset,
   };
 }

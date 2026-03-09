@@ -6,6 +6,41 @@
  */
 
 export type TTSEngine = 'runanywhere' | 'webspeech' | 'none';
+export type VoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'webspeech';
+
+export interface VoiceOption {
+  id: VoiceId;
+  label: string;
+  accent: string;
+  engine: TTSEngine;
+  /** Size hint shown in UI */
+  sizeHint?: string;
+}
+
+export const AVAILABLE_VOICES: VoiceOption[] = [
+  { id: 'piper-en-lessac', label: 'AI Voice', accent: 'US', engine: 'runanywhere', sizeHint: '~64MB' },
+  { id: 'piper-en-alba',   label: 'AI Voice', accent: 'British', engine: 'runanywhere', sizeHint: '~64MB' },
+  { id: 'webspeech',       label: 'System Voice', accent: '', engine: 'webspeech' },
+];
+
+interface VoiceConfig {
+  archiveUrl: string;
+  modelDir: string;
+  voiceId: string;
+}
+
+const VOICE_CONFIGS: Record<'piper-en-lessac' | 'piper-en-alba', VoiceConfig> = {
+  'piper-en-lessac': {
+    archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz',
+    modelDir: '/models/piper-en-lessac',
+    voiceId: 'piper-en-lessac',
+  },
+  'piper-en-alba': {
+    archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_GB-alba-medium.tar.gz',
+    modelDir: '/models/piper-en-alba',
+    voiceId: 'piper-en-alba',
+  },
+};
 
 interface TTSState {
   engine: TTSEngine;
@@ -21,12 +56,14 @@ let ttsState: TTSState = {
   error: null,
 };
 
-let initPromise: Promise<TTSEngine> | null = null;
+// Per-voice init promises (cached after first load)
+const voiceInitPromises: Partial<Record<VoiceId, Promise<TTSEngine>>> = {};
+let activeVoiceId: VoiceId = 'piper-en-lessac';
+let sdkBooted = false; // RunAnywhere + ONNX only need to boot once
+
 let currentPlayer: { dispose: () => void } | null = null;
 let speakGeneration = 0;
 
-const TTS_ARCHIVE_URL = 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz';
-const MODEL_DIR = '/models/piper-en-lessac';
 const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 function getProxyUrl(url: string): string {
@@ -49,136 +86,133 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
   }
 }
 
-/**
- * Initialize TTS engine. Tries RunAnywhere first, falls back to Web Speech API.
- */
-export async function initTTS(): Promise<TTSEngine> {
-  if (initPromise) return initPromise;
+function findPrefix(paths: string[]): string {
+  if (paths.length === 0) return '';
+  const first = paths[0];
+  const slashIdx = first.indexOf('/');
+  if (slashIdx < 0) return '';
+  const candidate = first.slice(0, slashIdx + 1);
+  if (paths.every(p => p.startsWith(candidate))) return candidate;
+  return '';
+}
 
-  initPromise = (async () => {
-    ttsState.loading = true;
+async function bootSDK(): Promise<{ TTS: any; SherpaONNXBridge: any; extractTarGz: any }> {
+  let RunAnywhere: any, SDKEnvironment: any, extractTarGz: any;
+  let ONNX: any, TTS: any, SherpaONNXBridge: any;
 
+  const webMod = await import('@runanywhere/web');
+  RunAnywhere = webMod.RunAnywhere;
+  SDKEnvironment = webMod.SDKEnvironment;
+  extractTarGz = webMod.extractTarGz;
+
+  const onnxMod = await import('@runanywhere/web-onnx');
+  ONNX = onnxMod.ONNX;
+  TTS = onnxMod.TTS;
+  SherpaONNXBridge = onnxMod.SherpaONNXBridge;
+
+  SherpaONNXBridge.shared.wasmUrl = new URL('/assets/sherpa-onnx-glue.js', window.location.origin).href;
+
+  if (!RunAnywhere.isInitialized) {
+    await RunAnywhere.initialize({ environment: SDKEnvironment.Development, debug: false });
+  }
+  if (!ONNX.isRegistered) {
+    await ONNX.register();
+  }
+
+  const sherpa = SherpaONNXBridge.shared;
+  await sherpa.ensureLoaded();
+
+  sdkBooted = true;
+  return { TTS, SherpaONNXBridge, extractTarGz };
+}
+
+async function loadPiperVoice(voiceKey: 'piper-en-lessac' | 'piper-en-alba'): Promise<TTSEngine> {
+  const config = VOICE_CONFIGS[voiceKey];
+
+  const { TTS, SherpaONNXBridge, extractTarGz } = await bootSDK();
+  const sherpa = SherpaONNXBridge.shared;
+
+  console.log(`[STORYWORLD] Downloading Piper voice "${voiceKey}" (~64MB)...`);
+  const response = await fetchWithTimeout(getProxyUrl(config.archiveUrl), DOWNLOAD_TIMEOUT_MS);
+  if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
+
+  let archiveData: Uint8Array;
+  if (response.body) {
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
     try {
-      let RunAnywhere: any, SDKEnvironment: any, extractTarGz: any;
-      let ONNX: any, TTS: any, SherpaONNXBridge: any;
-
-      try {
-        const webMod = await import('@runanywhere/web');
-        RunAnywhere = webMod.RunAnywhere;
-        SDKEnvironment = webMod.SDKEnvironment;
-        extractTarGz = webMod.extractTarGz;
-      } catch (err) {
-        throw new Error(`Failed to load RunAnywhere SDK: ${err instanceof Error ? err.message : String(err)}`);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) { chunks.push(value); received += value.length; }
       }
-
-      try {
-        const onnxMod = await import('@runanywhere/web-onnx');
-        ONNX = onnxMod.ONNX;
-        TTS = onnxMod.TTS;
-        SherpaONNXBridge = onnxMod.SherpaONNXBridge;
-      } catch (err) {
-        throw new Error(`Failed to load ONNX module: ${err instanceof Error ? err.message : String(err)}`);
-      }
-
-      SherpaONNXBridge.shared.wasmUrl = new URL('/assets/sherpa-onnx-glue.js', window.location.origin).href;
-
-      if (!RunAnywhere.isInitialized) {
-        await RunAnywhere.initialize({ environment: SDKEnvironment.Development, debug: false });
-      }
-      if (!ONNX.isRegistered) {
-        await ONNX.register();
-      }
-
-      const sherpa = SherpaONNXBridge.shared;
-      await sherpa.ensureLoaded();
-      console.log('[STORYWORLD] Sherpa-ONNX WASM loaded');
-
-      console.log('[STORYWORLD] Downloading Piper TTS archive (~75MB)...');
-      const response = await fetchWithTimeout(getProxyUrl(TTS_ARCHIVE_URL), DOWNLOAD_TIMEOUT_MS);
-      if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
-
-      // Stream download to avoid blocking main thread with response.arrayBuffer()
-      let archiveData: Uint8Array;
-      if (response.body) {
-        const reader = response.body.getReader();
-        const chunks: Uint8Array[] = [];
-        let received = 0;
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) { chunks.push(value); received += value.length; }
-          }
-        } finally {
-          try { reader.releaseLock(); } catch (_) {}
-        }
-        archiveData = new Uint8Array(received);
-        let offset = 0;
-        for (const chunk of chunks) { archiveData.set(chunk, offset); offset += chunk.length; }
-        // Yield to main thread after heavy memory work
-        await new Promise(r => setTimeout(r, 0));
-      } else {
-        archiveData = new Uint8Array(await response.arrayBuffer());
-      }
-      console.log(`[STORYWORLD] Archive downloaded: ${(archiveData.byteLength / 1e6).toFixed(1)}MB`);
-
-      if (archiveData.byteLength === 0) throw new Error('Downloaded empty TTS archive');
-
-      console.log('[STORYWORLD] Extracting archive...');
-      let entries: any[];
-      try {
-        entries = await extractTarGz(archiveData);
-      } catch (extractErr) {
-        throw new Error(`Failed to extract TTS archive: ${extractErr instanceof Error ? extractErr.message : String(extractErr)}`);
-      }
-      console.log(`[STORYWORLD] Extracted ${entries.length} files`);
-
-      const prefix = findPrefix(entries.map((e: any) => e.path));
-
-      let modelPath = '';
-      let tokensPath = '';
-      let dataDirPath = '';
-
-      for (const entry of entries) {
-        const relativePath = prefix ? entry.path.slice(prefix.length) : entry.path;
-        if (!relativePath || relativePath.endsWith('/')) continue;
-        
-        const fsPath = `${MODEL_DIR}/${relativePath}`;
-        sherpa.writeFile(fsPath, entry.data);
-
-        if (relativePath.endsWith('.onnx') && !relativePath.includes('/')) {
-          modelPath = fsPath;
-        }
-        if (relativePath === 'tokens.txt') {
-          tokensPath = fsPath;
-        }
-        if (relativePath.startsWith('espeak-ng-data/') && !dataDirPath) {
-          dataDirPath = `${MODEL_DIR}/espeak-ng-data`;
-        }
-      }
-
-      console.log(`[STORYWORLD] Model: ${modelPath}, Tokens: ${tokensPath}, DataDir: ${dataDirPath}`);
-
-      if (!modelPath) throw new Error('No .onnx model file found in archive');
-      if (!tokensPath) throw new Error('No tokens.txt found in archive');
-
-      console.log('[STORYWORLD] Loading TTS voice...');
-      await TTS.loadVoice({
-        voiceId: 'piper-en-lessac',
-        modelPath,
-        tokensPath,
-        dataDir: dataDirPath,
-        numThreads: 1,
-      });
-
-      ttsState = { engine: 'runanywhere', initialized: true, loading: false, error: null };
-      console.log('[STORYWORLD] ✓ RunAnywhere Piper TTS ready (neural voice)');
-      return 'runanywhere' as TTSEngine;
-    } catch (err) {
-      console.warn('[STORYWORLD] RunAnywhere TTS unavailable, falling back:', err);
+    } finally {
+      try { reader.releaseLock(); } catch (_) {}
     }
+    archiveData = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) { archiveData.set(chunk, offset); offset += chunk.length; }
+    await new Promise(r => setTimeout(r, 0));
+  } else {
+    archiveData = new Uint8Array(await response.arrayBuffer());
+  }
 
-    // Fallback to Web Speech API
+  if (archiveData.byteLength === 0) throw new Error('Downloaded empty TTS archive');
+
+  console.log(`[STORYWORLD] Extracting ${voiceKey} archive...`);
+  let entries: any[];
+  try {
+    entries = await extractTarGz(archiveData);
+  } catch (extractErr) {
+    throw new Error(`Failed to extract TTS archive: ${extractErr instanceof Error ? extractErr.message : String(extractErr)}`);
+  }
+
+  const prefix = findPrefix(entries.map((e: any) => e.path));
+  let modelPath = '';
+  let tokensPath = '';
+  let dataDirPath = '';
+
+  for (const entry of entries) {
+    const relativePath = prefix ? entry.path.slice(prefix.length) : entry.path;
+    if (!relativePath || relativePath.endsWith('/')) continue;
+    const fsPath = `${config.modelDir}/${relativePath}`;
+    sherpa.writeFile(fsPath, entry.data);
+    if (relativePath.endsWith('.onnx') && !relativePath.includes('/')) modelPath = fsPath;
+    if (relativePath === 'tokens.txt') tokensPath = fsPath;
+    if (relativePath.startsWith('espeak-ng-data/') && !dataDirPath) dataDirPath = `${config.modelDir}/espeak-ng-data`;
+  }
+
+  if (!modelPath) throw new Error('No .onnx model file found in archive');
+  if (!tokensPath) throw new Error('No tokens.txt found in archive');
+
+  await TTS.loadVoice({
+    voiceId: config.voiceId,
+    modelPath,
+    tokensPath,
+    dataDir: dataDirPath,
+    numThreads: 1,
+  });
+
+  console.log(`[STORYWORLD] ✓ Voice "${voiceKey}" loaded`);
+  return 'runanywhere';
+}
+
+/**
+ * Initialize TTS engine. Tries RunAnywhere first (with specified voice), falls back to Web Speech API.
+ */
+export async function initTTS(voiceId: VoiceId = 'piper-en-lessac'): Promise<TTSEngine> {
+  return setActiveVoice(voiceId);
+}
+
+/**
+ * Switch to a different voice. Downloads and caches the model if not already loaded.
+ * Returns the resulting TTSEngine.
+ */
+export async function setActiveVoice(voiceId: VoiceId): Promise<TTSEngine> {
+  activeVoiceId = voiceId;
+
+  if (voiceId === 'webspeech') {
     try {
       if ('speechSynthesis' in window) {
         await new Promise<void>((resolve) => {
@@ -190,28 +224,39 @@ export async function initTTS(): Promise<TTSEngine> {
           }
         });
         ttsState = { engine: 'webspeech', initialized: true, loading: false, error: null };
-        console.log('[STORYWORLD] Using Web Speech API fallback');
-        return 'webspeech' as TTSEngine;
+        return 'webspeech';
       }
     } catch (wsErr) {
       console.warn('[STORYWORLD] Web Speech API init failed:', wsErr);
     }
+    ttsState = { engine: 'none', initialized: true, loading: false, error: 'Web Speech not available' };
+    return 'none';
+  }
 
-    ttsState = { engine: 'none', initialized: true, loading: false, error: 'No TTS engine available' };
-    return 'none' as TTSEngine;
-  })();
+  // Piper voice — use cached promise if already loading/loaded
+  if (!voiceInitPromises[voiceId]) {
+    voiceInitPromises[voiceId] = (async () => {
+      ttsState.loading = true;
+      try {
+        const engine = await loadPiperVoice(voiceId as 'piper-en-lessac' | 'piper-en-alba');
+        ttsState = { engine, initialized: true, loading: false, error: null };
+        return engine;
+      } catch (err) {
+        console.warn('[STORYWORLD] RunAnywhere TTS unavailable, falling back to Web Speech:', err);
+        // Fallback
+        try {
+          if ('speechSynthesis' in window) {
+            ttsState = { engine: 'webspeech', initialized: true, loading: false, error: null };
+            return 'webspeech' as TTSEngine;
+          }
+        } catch (_) {}
+        ttsState = { engine: 'none', initialized: true, loading: false, error: 'No TTS engine available' };
+        return 'none' as TTSEngine;
+      }
+    })();
+  }
 
-  return initPromise;
-}
-
-function findPrefix(paths: string[]): string {
-  if (paths.length === 0) return '';
-  const first = paths[0];
-  const slashIdx = first.indexOf('/');
-  if (slashIdx < 0) return '';
-  const candidate = first.slice(0, slashIdx + 1);
-  if (paths.every(p => p.startsWith(candidate))) return candidate;
-  return '';
+  return voiceInitPromises[voiceId]!;
 }
 
 export async function speakSentence(
@@ -222,7 +267,7 @@ export async function speakSentence(
   const thisGen = ++speakGeneration;
 
   try {
-    if (!ttsState.initialized) await initTTS();
+    if (!ttsState.initialized) await setActiveVoice(activeVoiceId);
   } catch (initErr) {
     console.warn('[STORYWORLD] TTS init failed during speak:', initErr);
     onEnd?.();
@@ -239,11 +284,12 @@ export async function speakSentence(
     try {
       const { TTS, AudioPlayback } = await import('@runanywhere/web-onnx');
       if (thisGen !== speakGeneration) { onEnd?.(); return; }
-      const result = await TTS.synthesize(text, { speed });
+      // Pass the active voice id so TTS uses correct model
+      const result = await TTS.synthesize(text, { speed, voiceId: activeVoiceId });
       if (thisGen !== speakGeneration) { onEnd?.(); return; }
       const player = new AudioPlayback();
       currentPlayer = player;
-      
+
       try {
         await player.play(result.audioData, result.sampleRate);
       } catch (playErr: any) {
@@ -256,7 +302,7 @@ export async function speakSentence(
         }
         throw playErr;
       }
-      
+
       currentPlayer = null;
       try { player.dispose(); } catch (_) {}
       if (thisGen === speakGeneration) onEnd?.();
@@ -292,7 +338,6 @@ function speakWithWebSpeech(text: string, speed: number, onEnd?: () => void) {
       onEnd?.();
     };
 
-    // Watchdog: Chrome sometimes never fires onend for long utterances
     const words = text.split(/\s+/).length;
     const estimatedSec = (words / (150 * Math.max(speed, 0.5))) * 60;
     const watchdog = setTimeout(finish, (estimatedSec + 5) * 1000);
