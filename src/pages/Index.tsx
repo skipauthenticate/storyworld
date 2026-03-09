@@ -318,6 +318,7 @@ const Index = () => {
           selectedSentence={selectedSentence}
           book={activeBook}
           onClose={() => setIntelligenceEnabled(false)}
+          onUpdateBook={(patch) => updateBook(activeBook.id, patch)}
         />
       )}
 
