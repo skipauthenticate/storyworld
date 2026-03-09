@@ -252,7 +252,7 @@ const Index = () => {
     }
   }, [activeBook, activeChapter]);
 
-  const handleImportEpub = useCallback(async (file: File) => {
+  const handleImportEpub = useCallback(async (file: File, enrich: boolean) => {
     setImporting(true);
     try {
       const book = await parseEpub(file);
@@ -261,8 +261,9 @@ const Index = () => {
       setActiveChapter(book.chapters[0] ?? null);
       setSelectedSentence(null);
       toast.success(`Imported "${book.title}" — ${book.chapters.length} chapters`);
-      // Auto-start enrichment immediately
-      enrichment.startEnrichment(book);
+      if (enrich) {
+        enrichment.startEnrichment(book);
+      }
     } catch (err) {
       console.error('[Index] EPUB import failed:', err);
       toast.error(err instanceof Error ? err.message : "Failed to import EPUB");

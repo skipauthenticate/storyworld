@@ -70,20 +70,30 @@ function SidebarContent({
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file && file.name.toLowerCase().endsWith(".epub")) {
-                onImportEpub(file);
+                onImportEpub(file, enrichOnImport);
               }
               e.target.value = "";
             }}
           />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={importing}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-30"
-            title="Import EPUB"
-            aria-label="Import EPUB file"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <label className="flex items-center gap-1 cursor-pointer" title="Auto-enrich on import">
+              <Switch
+                checked={enrichOnImport}
+                onCheckedChange={setEnrichOnImport}
+                className="scale-[0.55] origin-right"
+              />
+              <span className="text-[8px] font-mono uppercase text-muted-foreground">Enrich</span>
+            </label>
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={importing}
+              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-30"
+              title="Import EPUB"
+              aria-label="Import EPUB file"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
         <div className="space-y-1">
           {books.map((book) => (
