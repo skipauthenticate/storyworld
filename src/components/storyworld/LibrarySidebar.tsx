@@ -6,6 +6,7 @@ import { useState, useRef } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Switch } from "@/components/ui/switch";
+import type { QueuePhase } from "@/hooks/useEnrichmentQueue";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,7 @@ interface LibrarySidebarProps {
   onImportEpub: (file: File, enrich: boolean) => void;
   onDeleteBook: (bookId: string) => void;
   importing: boolean;
+  enrichment?: { phase: QueuePhase; overallProgress: number };
 }
 
 function SidebarContent({
@@ -37,6 +39,7 @@ function SidebarContent({
   onImportEpub,
   onDeleteBook,
   importing,
+  enrichment,
   onItemClick,
 }: LibrarySidebarProps & { onItemClick?: () => void }) {
   const [expandedBook, setExpandedBook] = useState<string | null>(activeBook?.id ?? null);
@@ -135,6 +138,17 @@ function SidebarContent({
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
+                )}
+                {/* Enrichment status dot */}
+                {activeBook?.id === book.id && enrichment && enrichment.phase !== "idle" && (
+                  <div
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                      enrichment.phase === "completed"
+                        ? "bg-primary/40"
+                        : "bg-primary animate-pulse"
+                    )}
+                  />
                 )}
                 {book.chapters.length > 0 && (
                   <ChevronRight
