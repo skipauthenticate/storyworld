@@ -17,6 +17,7 @@ import { parseEpub } from "@/lib/epub-parser";
 import { toast } from "sonner";
 
 const FONT_SIZE_KEY = "storyworld-font-size";
+const READING_MODE_KEY = "storyworld-reading-mode";
 
 function loadFontSize(): FontSize {
   try {
@@ -24,6 +25,14 @@ function loadFontSize(): FontSize {
     if (v === "small" || v === "medium" || v === "large") return v;
   } catch {}
   return "medium";
+}
+
+function loadReadingMode(): ReadingMode {
+  try {
+    const v = localStorage.getItem(READING_MODE_KEY);
+    if (v === "scroll" || v === "page") return v;
+  } catch {}
+  return "scroll";
 }
 
 const Index = () => {
