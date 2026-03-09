@@ -196,6 +196,7 @@ export async function speakSentence(
   options: { speed?: number; onEnd?: () => void } = {}
 ): Promise<void> {
   const { speed = 1.0, onEnd } = options;
+  const thisGen = ++speakGeneration;
 
   try {
     if (!ttsState.initialized) await initTTS();
@@ -206,25 +207,27 @@ export async function speakSentence(
   }
 
   try {
-    stopSpeaking();
+    stopSpeakingInternal();
   } catch (_) { /* ignore stop errors */ }
+
+  if (thisGen !== speakGeneration) { onEnd?.(); return; }
 
   if (ttsState.engine === 'runanywhere') {
     try {
       const { TTS, AudioPlayback } = await import('@runanywhere/web-onnx');
+      if (thisGen !== speakGeneration) { onEnd?.(); return; }
       const result = await TTS.synthesize(text, { speed });
+      if (thisGen !== speakGeneration) { onEnd?.(); return; }
       const player = new AudioPlayback();
       currentPlayer = player;
       
       try {
         await player.play(result.audioData, result.sampleRate);
       } catch (playErr: any) {
-        // Handle autoplay policy blocking
         if (playErr?.name === 'NotAllowedError') {
           console.warn('[STORYWORLD] Autoplay blocked — user gesture required');
           currentPlayer = null;
           try { player.dispose(); } catch (_) {}
-          // Fall back to Web Speech which is more lenient
           speakWithWebSpeech(text, speed, onEnd);
           return;
         }
@@ -233,11 +236,11 @@ export async function speakSentence(
       
       currentPlayer = null;
       try { player.dispose(); } catch (_) {}
-      onEnd?.();
+      if (thisGen === speakGeneration) onEnd?.();
     } catch (err) {
       console.error('[STORYWORLD] Synthesis error, falling back:', err);
       currentPlayer = null;
-      speakWithWebSpeech(text, speed, onEnd);
+      if (thisGen === speakGeneration) speakWithWebSpeech(text, speed, onEnd);
     }
   } else if (ttsState.engine === 'webspeech') {
     speakWithWebSpeech(text, speed, onEnd);
