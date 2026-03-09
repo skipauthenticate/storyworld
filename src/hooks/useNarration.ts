@@ -33,7 +33,8 @@ export function useNarration({ sentences, speed: initialSpeed, voiceEnabled, onC
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(0);
   const [ttsEngine, setTtsEngine] = useState<TTSEngine>('none');
   const [ttsLoading, setTtsLoading] = useState(false);
-  const [speed, setSpeed] = useState(initialSpeed);
+  const [speed, setSpeedState] = useState(initialSpeed);
+  const speedRef = useRef(initialSpeed);
 
   const playingRef = useRef(false);
   const indexRef = useRef(0);
