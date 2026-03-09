@@ -9,6 +9,7 @@ import { useNarration } from "@/hooks/useNarration";
 import { useReadingProgress } from "@/hooks/useReadingProgress";
 import { useAutoResearch } from "@/hooks/useAutoResearch";
 import { useBookLibrary } from "@/hooks/useBookLibrary";
+import { useEnrichmentQueue } from "@/hooks/useEnrichmentQueue";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Zap } from "lucide-react";
