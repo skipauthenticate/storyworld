@@ -151,6 +151,7 @@ ${sample}`;
 
         // 3. Extract themes
         setState((prev) => ({ ...prev, phase: "extracting-themes", progress: 50 }));
+        await yieldToMain();
         if (abortRef.current) return;
 
         const themePrompt = `What are the major themes in "${title}" by ${author}? Return ONLY a JSON array of short theme strings (3-6 words each), up to 6 themes. Example: ["The American Dream","Class and social mobility"]
