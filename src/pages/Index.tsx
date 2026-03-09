@@ -340,6 +340,7 @@ const Index = () => {
                 book={activeBook}
                 onClose={() => setIntelligenceEnabled(false)}
                 className="w-full min-w-0 border-l-0"
+                onUpdateBook={(patch) => updateBook(activeBook.id, patch)}
               />
             </SheetContent>
           </Sheet>

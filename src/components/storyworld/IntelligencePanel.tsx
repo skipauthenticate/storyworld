@@ -107,14 +107,9 @@ function ContextContent({ selectedSentence, book, onUpdateBook }: { selectedSent
 
       <div className="h-px bg-border" />
 
-      {/* No enrichment notice */}
+      {/* No enrichment notice with enrich button */}
       {!hasEnrichment && (
-        <div className="flex flex-col items-center text-center py-3 px-2">
-          <BookOpen className="w-5 h-5 text-muted-foreground/40 mb-2" />
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            This book was imported without enrichment data. Use AI Chat below to discuss themes, characters, and literary analysis.
-          </p>
-        </div>
+        <EnrichmentSection book={book} onUpdateBook={onUpdateBook} />
       )}
 
       {/* Characters */}
