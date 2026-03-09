@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { sampleBooks, Book, Chapter, Sentence } from "@/data/sampleBooks";
 import { LibrarySidebar } from "@/components/storyworld/LibrarySidebar";
-import { ReadingPanel, FontSize } from "@/components/storyworld/ReadingPanel";
+import { ReadingPanel, FontSize, ReadingMode } from "@/components/storyworld/ReadingPanel";
 import { NarrationControls } from "@/components/storyworld/NarrationControls";
 import { IntelligencePanel } from "@/components/storyworld/IntelligencePanel";
 import { WelcomeScreen } from "@/components/storyworld/WelcomeScreen";
@@ -17,6 +17,7 @@ import { parseEpub } from "@/lib/epub-parser";
 import { toast } from "sonner";
 
 const FONT_SIZE_KEY = "storyworld-font-size";
+const READING_MODE_KEY = "storyworld-reading-mode";
 
 function loadFontSize(): FontSize {
   try {
@@ -24,6 +25,14 @@ function loadFontSize(): FontSize {
     if (v === "small" || v === "medium" || v === "large") return v;
   } catch {}
   return "medium";
+}
+
+function loadReadingMode(): ReadingMode {
+  try {
+    const v = localStorage.getItem(READING_MODE_KEY);
+    if (v === "scroll" || v === "page") return v;
+  } catch {}
+  return "scroll";
 }
 
 const Index = () => {
@@ -41,6 +50,7 @@ const Index = () => {
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
   const [importing, setImporting] = useState(false);
   const [fontSize, setFontSize] = useState<FontSize>(loadFontSize);
+  const [readingMode, setReadingMode] = useState<ReadingMode>(loadReadingMode);
   const isMobile = useIsMobile();
 
   const pendingSentenceRef = useRef<number | null>(null);
@@ -148,6 +158,11 @@ const Index = () => {
     try { localStorage.setItem(FONT_SIZE_KEY, size); } catch {}
   }, []);
 
+  const handleReadingModeChange = useCallback((mode: ReadingMode) => {
+    setReadingMode(mode);
+    try { localStorage.setItem(READING_MODE_KEY, mode); } catch {}
+  }, []);
+
   const bookProgress = useMemo(() => {
     if (!activeBook || !activeChapter) return 0;
     let total = 0;
@@ -250,10 +265,11 @@ const Index = () => {
             handleTogglePlay();
             break;
           case "ArrowLeft":
-            goToPrevious();
+            // In page mode, arrow keys are handled by the paged reader tap/keyboard
+            if (readingMode === "scroll") goToPrevious();
             break;
           case "ArrowRight":
-            goToNext();
+            if (readingMode === "scroll") goToNext();
             break;
         }
       } catch (err) {
@@ -262,7 +278,7 @@ const Index = () => {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleTogglePlay, goToPrevious, goToNext]);
+  }, [handleTogglePlay, goToPrevious, goToNext, readingMode]);
 
   const showRightPanel = intelligenceEnabled && activeBook;
 
@@ -302,6 +318,8 @@ const Index = () => {
               onPrevChapter={handlePrevChapter}
               onNextChapter={handleNextChapter}
               onFontSizeChange={handleFontSizeChange}
+              readingMode={readingMode}
+              onReadingModeChange={handleReadingModeChange}
             />
             <NarrationControls
               isPlaying={isPlaying}
