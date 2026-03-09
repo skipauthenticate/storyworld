@@ -89,7 +89,8 @@ export function ReadingPanel({
   // Reset page when chapter changes
   useEffect(() => {
     if (isPageMode) resetPage();
-  }, [chapter.id, isPageMode, resetPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapter.id, isPageMode]);
 
   // Recalc when font size changes
   useEffect(() => {
