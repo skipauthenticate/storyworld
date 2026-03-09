@@ -133,28 +133,37 @@ const Index = () => {
     }
   }, [activeSentenceIndex, activeBook, activeChapter, saveProgress]);
 
-  // Restore reading progress on mount
+  // Restore reading progress on mount and auto-resume enrichment
   useEffect(() => {
-    try {
-      const progress = loadProgress();
-      if (progress) {
-        const book = books.find((b) => b.id === progress.bookId);
-        if (book && book.chapters.length > 0) {
-          setActiveBook(book);
-          const chapter = book.chapters.find((c) => c.id === progress.chapterId);
-          setActiveChapter(chapter ?? book.chapters[0]);
-          if (progress.sentenceIndex > 0) {
-            pendingSentenceRef.current = progress.sentenceIndex;
-          }
-          // Auto-resume enrichment if book has no characters/themes yet
-          if (book.characters.length === 0 && book.themes.length === 0 && book.id !== "gatsby") {
-            enrichment.startEnrichment(book);
+    const restore = async () => {
+      try {
+        const progress = loadProgress();
+        if (progress) {
+          const book = books.find((b) => b.id === progress.bookId);
+          if (book && book.chapters.length > 0) {
+            setActiveBook(book);
+            const chapter = book.chapters.find((c) => c.id === progress.chapterId);
+            setActiveChapter(chapter ?? book.chapters[0]);
+            if (progress.sentenceIndex > 0) {
+              pendingSentenceRef.current = progress.sentenceIndex;
+            }
+            // Auto-resume enrichment if there's an incomplete queue in IndexedDB
+            if (book.id !== "gatsby") {
+              const qState = await loadQueueState(book.id);
+              if (qState && (qState.status === "running" || qState.status === "paused" || qState.status === "idle")) {
+                const hasIncomplete = qState.chapters.some(ch => ch.status !== "completed");
+                if (hasIncomplete) {
+                  enrichment.startEnrichment(book);
+                }
+              }
+            }
           }
         }
+      } catch (err) {
+        console.warn('[Index] Failed to load reading progress:', err);
       }
-    } catch (err) {
-      console.warn('[Index] Failed to load reading progress:', err);
-    }
+    };
+    restore();
   }, []);
 
   useEffect(() => {
