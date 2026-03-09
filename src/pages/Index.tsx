@@ -14,6 +14,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Zap } from "lucide-react";
 import { parseEpub } from "@/lib/epub-parser";
+import { loadQueueState } from "@/lib/enrichment-storage";
 import { toast } from "sonner";
 
 const FONT_SIZE_KEY = "storyworld-font-size";
@@ -132,28 +133,37 @@ const Index = () => {
     }
   }, [activeSentenceIndex, activeBook, activeChapter, saveProgress]);
 
-  // Restore reading progress on mount
+  // Restore reading progress on mount and auto-resume enrichment
   useEffect(() => {
-    try {
-      const progress = loadProgress();
-      if (progress) {
-        const book = books.find((b) => b.id === progress.bookId);
-        if (book && book.chapters.length > 0) {
-          setActiveBook(book);
-          const chapter = book.chapters.find((c) => c.id === progress.chapterId);
-          setActiveChapter(chapter ?? book.chapters[0]);
-          if (progress.sentenceIndex > 0) {
-            pendingSentenceRef.current = progress.sentenceIndex;
-          }
-          // Auto-resume enrichment if book has no characters/themes yet
-          if (book.characters.length === 0 && book.themes.length === 0 && book.id !== "gatsby") {
-            enrichment.startEnrichment(book);
+    const restore = async () => {
+      try {
+        const progress = loadProgress();
+        if (progress) {
+          const book = books.find((b) => b.id === progress.bookId);
+          if (book && book.chapters.length > 0) {
+            setActiveBook(book);
+            const chapter = book.chapters.find((c) => c.id === progress.chapterId);
+            setActiveChapter(chapter ?? book.chapters[0]);
+            if (progress.sentenceIndex > 0) {
+              pendingSentenceRef.current = progress.sentenceIndex;
+            }
+            // Auto-resume enrichment if there's an incomplete queue in IndexedDB
+            if (book.id !== "gatsby") {
+              const qState = await loadQueueState(book.id);
+              if (qState && (qState.status === "running" || qState.status === "paused" || qState.status === "idle")) {
+                const hasIncomplete = qState.chapters.some(ch => ch.status !== "completed");
+                if (hasIncomplete) {
+                  enrichment.startEnrichment(book);
+                }
+              }
+            }
           }
         }
+      } catch (err) {
+        console.warn('[Index] Failed to load reading progress:', err);
       }
-    } catch (err) {
-      console.warn('[Index] Failed to load reading progress:', err);
-    }
+    };
+    restore();
   }, []);
 
   useEffect(() => {
@@ -242,7 +252,7 @@ const Index = () => {
     }
   }, [activeBook, activeChapter]);
 
-  const handleImportEpub = useCallback(async (file: File) => {
+  const handleImportEpub = useCallback(async (file: File, enrich: boolean) => {
     setImporting(true);
     try {
       const book = await parseEpub(file);
@@ -251,8 +261,9 @@ const Index = () => {
       setActiveChapter(book.chapters[0] ?? null);
       setSelectedSentence(null);
       toast.success(`Imported "${book.title}" — ${book.chapters.length} chapters`);
-      // Auto-start enrichment immediately
-      enrichment.startEnrichment(book);
+      if (enrich) {
+        enrichment.startEnrichment(book);
+      }
     } catch (err) {
       console.error('[Index] EPUB import failed:', err);
       toast.error(err instanceof Error ? err.message : "Failed to import EPUB");
