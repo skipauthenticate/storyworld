@@ -229,13 +229,15 @@ const Index = () => {
       setActiveChapter(book.chapters[0] ?? null);
       setSelectedSentence(null);
       toast.success(`Imported "${book.title}" — ${book.chapters.length} chapters`);
+      // Auto-start enrichment immediately
+      enrichment.startEnrichment(book);
     } catch (err) {
       console.error('[Index] EPUB import failed:', err);
       toast.error(err instanceof Error ? err.message : "Failed to import EPUB");
     } finally {
       setImporting(false);
     }
-  }, [addBook]);
+  }, [addBook, enrichment.startEnrichment]);
 
   // Keyboard shortcuts
   useEffect(() => {
