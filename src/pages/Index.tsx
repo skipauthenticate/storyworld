@@ -56,7 +56,10 @@ const Index = () => {
   const pendingSentenceRef = useRef<number | null>(null);
   const autoAdvanceRef = useRef(false);
 
-  const allSentences = activeChapter?.scenes.flatMap((s) => s.sentences) ?? [];
+  const allSentences = useMemo(
+    () => activeChapter?.scenes.flatMap((s) => s.sentences) ?? [],
+    [activeChapter]
+  );
   const enrichmentOnUpdate = useCallback((patch: Partial<Book>) => {
     if (activeBook) updateBook(activeBook.id, patch);
   }, [activeBook, updateBook]);
