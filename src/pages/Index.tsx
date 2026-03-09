@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { sampleBooks, Book, Chapter, Sentence } from "@/data/sampleBooks";
 import { LibrarySidebar } from "@/components/storyworld/LibrarySidebar";
-import { ReadingPanel, FontSize } from "@/components/storyworld/ReadingPanel";
+import { ReadingPanel, FontSize, ReadingMode } from "@/components/storyworld/ReadingPanel";
 import { NarrationControls } from "@/components/storyworld/NarrationControls";
 import { IntelligencePanel } from "@/components/storyworld/IntelligencePanel";
 import { WelcomeScreen } from "@/components/storyworld/WelcomeScreen";
