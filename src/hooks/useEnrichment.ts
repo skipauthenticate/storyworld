@@ -112,6 +112,7 @@ export function useEnrichment() {
         if (!ok) throw new Error("Failed to initialize AI engine");
         if (abortRef.current) return;
 
+        const yieldToMain = (): Promise<void> => new Promise(r => setTimeout(r, 0));
         const sample = extractTextSample(book, 2500);
         const title = book.title;
         const author = book.author;
@@ -150,6 +151,7 @@ ${sample}`;
 
         // 3. Extract themes
         setState((prev) => ({ ...prev, phase: "extracting-themes", progress: 50 }));
+        await yieldToMain();
         if (abortRef.current) return;
 
         const themePrompt = `What are the major themes in "${title}" by ${author}? Return ONLY a JSON array of short theme strings (3-6 words each), up to 6 themes. Example: ["The American Dream","Class and social mobility"]
@@ -176,6 +178,7 @@ ${sample.substring(0, 1500)}`;
 
         // 4. Annotate first chapter sentences (batch of first ~8 sentences)
         setState((prev) => ({ ...prev, phase: "annotating", progress: 70 }));
+        await yieldToMain();
         if (abortRef.current) return;
 
         const firstChapter = book.chapters[0];

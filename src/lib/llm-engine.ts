@@ -201,6 +201,9 @@ export async function initLLM(): Promise<boolean> {
           offset += chunk.length;
         }
 
+        // Yield to main thread after heavy memory assembly
+        await new Promise(r => setTimeout(r, 0));
+
         console.log(`[STORYWORLD LLM] Downloaded: ${(received / 1e6).toFixed(1)}MB`);
 
         // Cache for next time (fire-and-forget)

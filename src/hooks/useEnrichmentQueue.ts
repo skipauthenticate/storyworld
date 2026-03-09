@@ -30,6 +30,9 @@ const CHARACTER_COLORS = [
 
 const ANNOTATION_BATCH_SIZE = 6;
 
+/** Yield to the browser's event loop so it can paint / handle input */
+const yieldToMain = (): Promise<void> => new Promise(r => setTimeout(r, 0));
+
 // ── Helpers ──
 
 function extractChapterText(chapter: Chapter, maxChars = 2000): string {
@@ -136,6 +139,8 @@ export function useEnrichmentQueue(
 
       if (abortRef.current) return { characters, themes: [] };
 
+      await yieldToMain();
+
       // Themes
       const themePrompt = `What are the major themes in "${book.title}" by ${book.author}? Return ONLY a JSON array of short theme strings (3-6 words each), up to 6 themes. Example: ["The American Dream","Class and social mobility"]\n\nText:\n${sample.substring(0, 1500)}`;
 
@@ -169,8 +174,12 @@ export function useEnrichmentQueue(
 
       const annotations = { ...existingAnnotations };
 
+      let batchCount = 0;
       for (let i = 0; i < unannotated.length; i += ANNOTATION_BATCH_SIZE) {
         if (abortRef.current) break;
+
+        // Yield between batches so the UI stays responsive
+        await yieldToMain();
 
         const batch = unannotated.slice(i, i + ANNOTATION_BATCH_SIZE);
         const sentTexts = batch.map((s, j) => `[${j}] ${s.text}`).join("\n");
@@ -196,6 +205,8 @@ export function useEnrichmentQueue(
           // Continue with next batch
         }
 
+        batchCount++;
+
         // Progressive update: apply annotations so far to the book
         const progress = Math.round(
           ((Object.keys(annotations).length) / allSentences.length) * 100
@@ -210,8 +221,10 @@ export function useEnrichmentQueue(
           ),
         }));
 
-        // Apply to book immediately
-        applyAnnotationsToBook(book, chapter.id, annotations, onBookUpdate);
+        // Throttle book re-renders: only apply every 2nd batch (or on last batch)
+        if (batchCount % 2 === 0 || i + ANNOTATION_BATCH_SIZE >= unannotated.length) {
+          applyAnnotationsToBook(book, chapter.id, annotations, onBookUpdate);
+        }
       }
 
       return annotations;
@@ -258,6 +271,9 @@ export function useEnrichmentQueue(
 
         const next = getNextChapter(currentQueue!, book);
         if (!next) break;
+
+        // Yield between chapters
+        await yieldToMain();
 
         const chapter = book.chapters.find((c) => c.id === next.chapterId);
         if (!chapter) {
