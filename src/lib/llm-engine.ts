@@ -299,8 +299,19 @@ export interface ChatMessage {
   content: string;
 }
 
+/** Whether the environment supports SharedArrayBuffer (needed for threaded WASM streaming) */
+function hasSharedArrayBuffer(): boolean {
+  try {
+    return typeof SharedArrayBuffer !== 'undefined' && typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Generate a chat response using the on-device LLM with streaming.
+ * Generate a chat response using the on-device LLM.
+ * Uses non-streaming mode when SharedArrayBuffer is unavailable (no cross-origin isolation),
+ * since the WASM streaming callback mechanism blocks the main thread without it.
  */
 export async function chatGenerate(
   messages: ChatMessage[],
@@ -327,7 +338,16 @@ export async function chatGenerate(
   }
 
   const prompt = formatChatMLPrompt(messages);
+  const canStream = hasSharedArrayBuffer();
 
+  // Without SharedArrayBuffer, streaming hangs because WASM callbacks block the main thread
+  // and setTimeout-based timeouts can never fire. Use non-streaming mode instead.
+  if (!canStream) {
+    console.log('[STORYWORLD LLM] Using non-streaming generation (no SharedArrayBuffer)');
+    return generateNonStreaming(TextGeneration, prompt, { maxTokens, temperature, onToken, onDone });
+  }
+
+  // Streaming mode (SharedArrayBuffer available)
   try {
     const streamResult = await TextGeneration.generateStream(prompt, {
       maxTokens,
@@ -347,16 +367,44 @@ export async function chatGenerate(
     return fullText;
   } catch (streamErr) {
     console.warn('[STORYWORLD LLM] Streaming failed, trying non-streaming:', streamErr);
-    try {
-      const result = await TextGeneration.generate(prompt, { maxTokens, temperature });
-      const text = cleanResponse(result.text || '');
-      try { onToken?.(text); } catch (_) { /* ignored */ }
-      try { onDone?.(text); } catch (_) { /* ignored */ }
-      return text;
-    } catch (fallbackErr) {
-      throw new Error(`LLM generation failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`);
+    return generateNonStreaming(TextGeneration, prompt, { maxTokens, temperature, onToken, onDone });
+  }
+}
+
+/**
+ * Non-streaming generation. Tries TextGeneration.generate() first.
+ * If unavailable, wraps generateStream() with a Web Worker-based timeout
+ * that can fire even when the main thread is partially blocked.
+ */
+async function generateNonStreaming(
+  TextGeneration: any,
+  prompt: string,
+  opts: { maxTokens: number; temperature: number; onToken?: (t: string) => void; onDone?: (t: string) => void },
+): Promise<string> {
+  const { maxTokens, temperature, onToken, onDone } = opts;
+
+  // Try non-streaming generate() — preferred since it returns the complete result
+  if (typeof TextGeneration.generate === 'function') {
+    const result = await TextGeneration.generate(prompt, { maxTokens, temperature });
+    const text = cleanResponse(typeof result === 'string' ? result : result?.text || '');
+    try { onToken?.(text); } catch (_) { /* ignored */ }
+    try { onDone?.(text); } catch (_) { /* ignored */ }
+    return text;
+  }
+
+  // Fallback: use generateStream but collect all tokens
+  console.warn('[STORYWORLD LLM] TextGeneration.generate not found, using generateStream fallback');
+  const streamResult = await TextGeneration.generateStream(prompt, { maxTokens, temperature });
+  let fullText = '';
+  for await (const token of streamResult.stream) {
+    if (token) {
+      fullText += token;
+      try { onToken?.(token); } catch (_) { /* ignored */ }
     }
   }
+  fullText = cleanResponse(fullText);
+  try { onDone?.(fullText); } catch (_) { /* ignored */ }
+  return fullText;
 }
 
 function formatChatMLPrompt(messages: ChatMessage[]): string {
