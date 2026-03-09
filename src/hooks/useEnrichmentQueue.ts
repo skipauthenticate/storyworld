@@ -139,6 +139,8 @@ export function useEnrichmentQueue(
 
       if (abortRef.current) return { characters, themes: [] };
 
+      await yieldToMain();
+
       // Themes
       const themePrompt = `What are the major themes in "${book.title}" by ${book.author}? Return ONLY a JSON array of short theme strings (3-6 words each), up to 6 themes. Example: ["The American Dream","Class and social mobility"]\n\nText:\n${sample.substring(0, 1500)}`;
 
