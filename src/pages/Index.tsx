@@ -50,6 +50,7 @@ const Index = () => {
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(null);
   const [importing, setImporting] = useState(false);
   const [fontSize, setFontSize] = useState<FontSize>(loadFontSize);
+  const [readingMode, setReadingMode] = useState<ReadingMode>(loadReadingMode);
   const isMobile = useIsMobile();
 
   const pendingSentenceRef = useRef<number | null>(null);
