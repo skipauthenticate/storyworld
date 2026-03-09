@@ -57,6 +57,8 @@ export function IntelligencePanel({
         selectedSentence={selectedSentence}
         expanded={chatExpanded}
         onToggleExpand={() => setChatExpanded(v => !v)}
+        currentChapter={currentChapter ?? null}
+        activeSentenceIndex={activeSentenceIndex ?? 0}
       />
     </aside>
   );
