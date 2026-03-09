@@ -20,31 +20,43 @@ export function usePagedReader({ enabled, onNextChapter, onPrevChapter }: UsePag
     const inner = innerRef.current;
     if (!outer || !inner || !enabled) return;
 
-    const width = outer.clientWidth;
-    if (width === 0) return;
-    setContainerWidth(width);
+    const cs = window.getComputedStyle(outer);
+    const padL = Number.parseFloat(cs.paddingLeft || "0") || 0;
+    const padR = Number.parseFloat(cs.paddingRight || "0") || 0;
 
+    // Use the content box width as the page width (avoids edge clipping)
+    const pageWidth = outer.clientWidth - padL - padR;
+    if (pageWidth <= 0) return;
+    setContainerWidth(pageWidth);
+
+    const prevTransform = inner.style.transform;
     // Temporarily reset transform to measure true scrollWidth
     inner.style.transform = "none";
 
-    // Set column width to container width so each column = one page
-    inner.style.columnWidth = `${width}px`;
+    // Force exact column width so each column === one page
+    inner.style.columnWidth = `${pageWidth}px`;
 
     // Force reflow then measure
     void inner.offsetHeight;
 
     const scrollW = inner.scrollWidth;
-    const pages = Math.max(1, Math.ceil(scrollW / width));
+    const pages = Math.max(1, Math.ceil(scrollW / pageWidth));
+
+    // Restore transform immediately to prevent visible jump
+    inner.style.transform = prevTransform || `translateX(-${currentPage * pageWidth}px)`;
+
     setTotalPages(pages);
     setCurrentPage((prev) => Math.min(prev, pages - 1));
-  }, [enabled]);
+  }, [enabled, currentPage]);
 
   // Apply transform whenever page or width changes
   useEffect(() => {
     const inner = innerRef.current;
     if (!inner || !enabled || containerWidth === 0) return;
     const offset = currentPage * containerWidth;
-    inner.style.transform = `translateX(-${offset}px)`;
+    requestAnimationFrame(() => {
+      inner.style.transform = `translateX(-${offset}px)`;
+    });
   }, [currentPage, enabled, containerWidth]);
 
   // Observe resize + mutations
