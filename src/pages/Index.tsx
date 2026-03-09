@@ -9,6 +9,7 @@ import { useNarration } from "@/hooks/useNarration";
 import { useReadingProgress } from "@/hooks/useReadingProgress";
 import { useAutoResearch } from "@/hooks/useAutoResearch";
 import { useBookLibrary } from "@/hooks/useBookLibrary";
+import { useEnrichmentQueue } from "@/hooks/useEnrichmentQueue";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Zap } from "lucide-react";
@@ -27,6 +28,11 @@ function loadFontSize(): FontSize {
 
 const Index = () => {
   const { books, addBook, removeBook, updateBook } = useBookLibrary();
+
+  const handleBookUpdate = useCallback((bookId: string, patch: Partial<Book>) => {
+    updateBook(bookId, patch);
+  }, [updateBook]);
+
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
@@ -41,6 +47,18 @@ const Index = () => {
   const autoAdvanceRef = useRef(false);
 
   const allSentences = activeChapter?.scenes.flatMap((s) => s.sentences) ?? [];
+  const enrichmentOnUpdate = useCallback((patch: Partial<Book>) => {
+    if (activeBook) updateBook(activeBook.id, patch);
+  }, [activeBook, updateBook]);
+
+  const enrichment = useEnrichmentQueue(enrichmentOnUpdate);
+
+  // Keep enrichment aware of reading position
+  useEffect(() => {
+    if (activeChapter) {
+      enrichment.setReadingChapter(activeChapter.id);
+    }
+  }, [activeChapter, enrichment.setReadingChapter]);
 
   const { triggerImprovement } = useAutoResearch();
 
@@ -211,13 +229,15 @@ const Index = () => {
       setActiveChapter(book.chapters[0] ?? null);
       setSelectedSentence(null);
       toast.success(`Imported "${book.title}" — ${book.chapters.length} chapters`);
+      // Auto-start enrichment immediately
+      enrichment.startEnrichment(book);
     } catch (err) {
       console.error('[Index] EPUB import failed:', err);
       toast.error(err instanceof Error ? err.message : "Failed to import EPUB");
     } finally {
       setImporting(false);
     }
-  }, [addBook]);
+  }, [addBook, enrichment.startEnrichment]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -318,7 +338,7 @@ const Index = () => {
           selectedSentence={selectedSentence}
           book={activeBook}
           onClose={() => setIntelligenceEnabled(false)}
-          onUpdateBook={(patch) => updateBook(activeBook.id, patch)}
+          enrichment={enrichment}
           currentChapterId={activeChapter?.id ?? null}
         />
       )}
@@ -341,7 +361,7 @@ const Index = () => {
                 book={activeBook}
                 onClose={() => setIntelligenceEnabled(false)}
                 className="w-full min-w-0 border-l-0"
-                onUpdateBook={(patch) => updateBook(activeBook.id, patch)}
+                enrichment={enrichment}
                 currentChapterId={activeChapter?.id ?? null}
               />
             </SheetContent>

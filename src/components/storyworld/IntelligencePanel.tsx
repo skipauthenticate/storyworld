@@ -4,14 +4,14 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLLMChat } from "@/hooks/useLLMChat";
-import { useEnrichmentQueue, type QueuePhase } from "@/hooks/useEnrichmentQueue";
+import type { EnrichmentQueueHook, QueuePhase } from "@/hooks/useEnrichmentQueue";
 import type { ChapterEnrichment } from "@/lib/enrichment-storage";
 
 interface IntelligencePanelProps {
   selectedSentence: Sentence | null;
   book: Book;
   onClose: () => void;
-  onUpdateBook: (patch: Partial<Book>) => void;
+  enrichment: EnrichmentQueueHook;
   currentChapterId?: string | null;
   className?: string;
 }
@@ -20,19 +20,11 @@ export function IntelligencePanel({
   selectedSentence,
   book,
   onClose,
-  onUpdateBook,
+  enrichment,
   currentChapterId,
   className,
 }: IntelligencePanelProps) {
   const [chatExpanded, setChatExpanded] = useState(false);
-  const enrichment = useEnrichmentQueue(onUpdateBook);
-
-  // Keep enrichment aware of reading position
-  useEffect(() => {
-    if (currentChapterId) {
-      enrichment.setReadingChapter(currentChapterId);
-    }
-  }, [currentChapterId, enrichment.setReadingChapter]);
 
   return (
     <aside className={cn("w-[340px] min-w-[340px] h-full flex flex-col border-l border-border bg-card overflow-hidden", className)} role="complementary" aria-label="Intelligence panel">
@@ -73,7 +65,7 @@ function ContextContent({
 }: {
   selectedSentence: Sentence | null;
   book: Book;
-  enrichment: ReturnType<typeof useEnrichmentQueue>;
+  enrichment: EnrichmentQueueHook;
 }) {
   const hasEnrichment = book.characters.length > 0 || book.themes.length > 0;
   const isActive = enrichment.phase !== "idle" && enrichment.phase !== "completed" && enrichment.phase !== "error";
@@ -203,7 +195,7 @@ function EnrichmentSection({
   enrichment,
 }: {
   book: Book;
-  enrichment: ReturnType<typeof useEnrichmentQueue>;
+  enrichment: EnrichmentQueueHook;
 }) {
   const { phase, error, llmStatus, llmProgress, startEnrichment, cancel, queueState } = enrichment;
 
@@ -238,21 +230,10 @@ function EnrichmentSection({
   return (
     <div className="flex flex-col items-center text-center py-3 px-3 space-y-3">
       {phase === "idle" && !hasEnrichment && (
-        <>
-          <Brain className="w-6 h-6 text-primary/60 mb-1" />
-          <h4 className="text-[12px] font-medium text-foreground">Generate Intelligence</h4>
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Use on-device AI to progressively extract characters, themes, and annotations chapter by chapter.
-          </p>
-          <button
-            onClick={handleEnrich}
-            className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-[11px] font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Enrich Book
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </>
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <Clock className="w-3.5 h-3.5" />
+          <span>Waiting for enrichment…</span>
+        </div>
       )}
 
       {phase === "idle" && hasEnrichment && queueState?.status === "paused" && (
