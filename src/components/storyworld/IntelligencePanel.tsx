@@ -18,6 +18,7 @@ export function IntelligencePanel({
   selectedSentence,
   book,
   onClose,
+  onUpdateBook,
   className,
 }: IntelligencePanelProps) {
   const [chatExpanded, setChatExpanded] = useState(false);
