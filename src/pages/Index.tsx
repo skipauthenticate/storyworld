@@ -26,7 +26,7 @@ function loadFontSize(): FontSize {
 }
 
 const Index = () => {
-  const { books, addBook, removeBook } = useBookLibrary();
+  const { books, addBook, removeBook, updateBook } = useBookLibrary();
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
