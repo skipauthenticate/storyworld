@@ -26,7 +26,7 @@ function loadFontSize(): FontSize {
 }
 
 const Index = () => {
-  const { books, addBook, removeBook } = useBookLibrary();
+  const { books, addBook, removeBook, updateBook } = useBookLibrary();
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [activeChapter, setActiveChapter] = useState<Chapter | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
@@ -318,6 +318,7 @@ const Index = () => {
           selectedSentence={selectedSentence}
           book={activeBook}
           onClose={() => setIntelligenceEnabled(false)}
+          onUpdateBook={(patch) => updateBook(activeBook.id, patch)}
         />
       )}
 
@@ -339,6 +340,7 @@ const Index = () => {
                 book={activeBook}
                 onClose={() => setIntelligenceEnabled(false)}
                 className="w-full min-w-0 border-l-0"
+                onUpdateBook={(patch) => updateBook(activeBook.id, patch)}
               />
             </SheetContent>
           </Sheet>

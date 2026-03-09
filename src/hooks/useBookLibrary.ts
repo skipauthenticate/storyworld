@@ -39,5 +39,13 @@ export function useBookLibrary() {
     });
   }, []);
 
-  return { books, addBook, removeBook };
+  const updateBook = useCallback((bookId: string, patch: Partial<Book>) => {
+    setImported((prev) => {
+      const next = prev.map((b) => (b.id === bookId ? { ...b, ...patch } : b));
+      saveImported(next);
+      return next;
+    });
+  }, []);
+
+  return { books, addBook, removeBook, updateBook };
 }
