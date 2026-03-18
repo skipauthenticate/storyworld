@@ -8,7 +8,7 @@
 import { getProxyUrl, fetchWithTimeout, getSDKEnvironment, DOWNLOAD_TIMEOUT_MS } from './runanywhere-common';
 
 export type TTSEngine = 'runanywhere' | 'webspeech' | 'none';
-export type VoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'piper-en-amy' | 'webspeech';
+export type VoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'webspeech';
 
 export interface VoiceOption {
   id: VoiceId;
@@ -21,7 +21,6 @@ export interface VoiceOption {
 
 export const AVAILABLE_VOICES: VoiceOption[] = [
   { id: 'piper-en-lessac', label: 'AI Voice', accent: 'US', engine: 'runanywhere', sizeHint: '~64MB' },
-  { id: 'piper-en-amy',    label: 'AI Voice', accent: 'US Alt', engine: 'runanywhere', sizeHint: '~64MB' },
   { id: 'piper-en-alba',   label: 'AI Voice', accent: 'British', engine: 'runanywhere', sizeHint: '~64MB' },
   { id: 'webspeech',       label: 'System Voice', accent: '', engine: 'webspeech' },
 ];
