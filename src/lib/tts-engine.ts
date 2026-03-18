@@ -335,12 +335,24 @@ export async function speakSentence(
 
   if (ttsState.engine === 'runanywhere') {
     try {
-      const { TTS, AudioPlayback } = await import('@runanywhere/web-onnx');
+      const onnxMod = await import('@runanywhere/web-onnx');
+      const TTS = onnxMod.TTS;
       if (thisGen !== speakGeneration) { onEnd?.(); return; }
-      // The TTS API currently only supports synthesized with active voice loaded
       const result = await TTS.synthesize(text, { speed });
       if (thisGen !== speakGeneration) { onEnd?.(); return; }
-      const player = new AudioPlayback();
+
+      // Play audio using AudioContext
+      const audioCtx = new AudioContext({ sampleRate: result.sampleRate });
+      const buffer = audioCtx.createBuffer(1, result.audioData.length, result.sampleRate);
+      buffer.getChannelData(0).set(result.audioData);
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.playbackRate.value = 1.0; // speed already applied by TTS
+      source.connect(audioCtx.destination);
+
+      const player = {
+        dispose: () => { try { source.stop(); audioCtx.close(); } catch (_) {} },
+      };
       currentPlayer = player;
 
       try {
