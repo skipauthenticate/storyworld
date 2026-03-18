@@ -31,18 +31,13 @@ interface VoiceConfig {
   voiceId: string;
 }
 
-type PiperVoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'piper-en-amy';
+type PiperVoiceId = 'piper-en-lessac' | 'piper-en-alba';
 
 const VOICE_CONFIGS: Record<PiperVoiceId, VoiceConfig> = {
   'piper-en-lessac': {
     archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz',
     modelDir: '/models/piper-en-lessac',
     voiceId: 'piper-en-lessac',
-  },
-  'piper-en-amy': {
-    archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-amy-medium.tar.gz',
-    modelDir: '/models/piper-en-amy',
-    voiceId: 'piper-en-amy',
   },
   'piper-en-alba': {
     archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_GB-alba-medium.tar.gz',
