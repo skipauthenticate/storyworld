@@ -335,10 +335,17 @@ export async function chatGenerate(
     });
 
     let fullText = '';
+    let tokenCount = 0;
     for await (const token of streamResult.stream) {
       if (token) {
         fullText += token;
+        tokenCount++;
         try { onToken?.(token); } catch (_) { /* callback error ignored */ }
+
+        // Yield periodically so long generations don't starve the UI thread
+        if (tokenCount % 24 === 0) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
       }
     }
 
