@@ -8,6 +8,7 @@ import type { Book, Chapter, Character } from "@/data/sampleBooks";
 import {
   initLLM,
   chatGenerate,
+  cancelGeneration,
   onLLMStateChange,
   getLLMState,
   type LLMEngineStatus,
@@ -41,12 +42,25 @@ const yieldToMain = (): Promise<void> => new Promise(r => setTimeout(r, 0));
 async function chatGenerateWithTimeout(
   ...args: Parameters<typeof chatGenerate>
 ): ReturnType<typeof chatGenerate> {
-  return Promise.race([
-    chatGenerate(...args),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('LLM generation timed out')), GENERATION_TIMEOUT_MS)
-    ),
-  ]);
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      try { cancelGeneration(); } catch (_) { /* ignore */ }
+      reject(new Error(`LLM generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s`));
+    }, GENERATION_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([
+      chatGenerate(...args),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 // ── Helpers ──
@@ -454,6 +468,7 @@ export function useEnrichmentQueue(
   const cancel = useCallback(() => {
     abortRef.current = true;
     runningRef.current = false;
+    try { cancelGeneration(); } catch (_) { /* ignore */ }
     setPhase("idle");
     // Persist paused state
     setQueueState((prev) => {
