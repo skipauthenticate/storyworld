@@ -8,7 +8,7 @@
 import { getProxyUrl, fetchWithTimeout, getSDKEnvironment, DOWNLOAD_TIMEOUT_MS } from './runanywhere-common';
 
 export type TTSEngine = 'runanywhere' | 'webspeech' | 'none';
-export type VoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'piper-en-amy' | 'webspeech';
+export type VoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'webspeech';
 
 export interface VoiceOption {
   id: VoiceId;
@@ -21,7 +21,6 @@ export interface VoiceOption {
 
 export const AVAILABLE_VOICES: VoiceOption[] = [
   { id: 'piper-en-lessac', label: 'AI Voice', accent: 'US', engine: 'runanywhere', sizeHint: '~64MB' },
-  { id: 'piper-en-amy',    label: 'AI Voice', accent: 'US Alt', engine: 'runanywhere', sizeHint: '~64MB' },
   { id: 'piper-en-alba',   label: 'AI Voice', accent: 'British', engine: 'runanywhere', sizeHint: '~64MB' },
   { id: 'webspeech',       label: 'System Voice', accent: '', engine: 'webspeech' },
 ];
@@ -32,18 +31,13 @@ interface VoiceConfig {
   voiceId: string;
 }
 
-type PiperVoiceId = 'piper-en-lessac' | 'piper-en-alba' | 'piper-en-amy';
+type PiperVoiceId = 'piper-en-lessac' | 'piper-en-alba';
 
 const VOICE_CONFIGS: Record<PiperVoiceId, VoiceConfig> = {
   'piper-en-lessac': {
     archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-lessac-medium.tar.gz',
     modelDir: '/models/piper-en-lessac',
     voiceId: 'piper-en-lessac',
-  },
-  'piper-en-amy': {
-    archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_US-amy-medium.tar.gz',
-    modelDir: '/models/piper-en-amy',
-    voiceId: 'piper-en-amy',
   },
   'piper-en-alba': {
     archiveUrl: 'https://github.com/RunanywhereAI/sherpa-onnx/releases/download/runanywhere-models-v1/vits-piper-en_GB-alba-medium.tar.gz',
@@ -341,16 +335,31 @@ export async function speakSentence(
 
   if (ttsState.engine === 'runanywhere') {
     try {
-      const { TTS, AudioPlayback } = await import('@runanywhere/web-onnx');
+      const onnxMod = await import('@runanywhere/web-onnx');
+      const TTS = onnxMod.TTS;
       if (thisGen !== speakGeneration) { onEnd?.(); return; }
-      // The TTS API currently only supports synthesized with active voice loaded
       const result = await TTS.synthesize(text, { speed });
       if (thisGen !== speakGeneration) { onEnd?.(); return; }
-      const player = new AudioPlayback();
+
+      // Play audio using AudioContext
+      const audioCtx = new AudioContext({ sampleRate: result.sampleRate });
+      const buffer = audioCtx.createBuffer(1, result.audioData.length, result.sampleRate);
+      buffer.getChannelData(0).set(result.audioData);
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.playbackRate.value = 1.0; // speed already applied by TTS
+      source.connect(audioCtx.destination);
+
+      const player = {
+        dispose: () => { try { source.stop(); audioCtx.close(); } catch (_) {} },
+      };
       currentPlayer = player;
 
       try {
-        await player.play(result.audioData, result.sampleRate);
+        await new Promise<void>((resolve, reject) => {
+          source.onended = () => resolve();
+          try { source.start(); } catch (e) { reject(e); }
+        });
       } catch (playErr: any) {
         if (playErr?.name === 'NotAllowedError') {
           console.warn('[STORYWORLD] Autoplay blocked — user gesture required');
