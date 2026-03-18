@@ -356,7 +356,10 @@ export async function speakSentence(
       currentPlayer = player;
 
       try {
-        await player.play(result.audioData, result.sampleRate);
+        await new Promise<void>((resolve, reject) => {
+          source.onended = () => resolve();
+          try { source.start(); } catch (e) { reject(e); }
+        });
       } catch (playErr: any) {
         if (playErr?.name === 'NotAllowedError') {
           console.warn('[STORYWORLD] Autoplay blocked — user gesture required');
