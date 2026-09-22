@@ -44,7 +44,7 @@ function isAllowedHost(hostname: string): boolean {
   return [...ALLOWED_HOSTS, ...CDN_HOSTS].some(h => hostname === h || hostname.endsWith('.' + h));
 }
 
-function isAllowedUrl(urlString: string): boolean {
+export function isAllowedUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString);
     if (url.protocol !== 'https:') return false;
@@ -56,9 +56,27 @@ function isAllowedUrl(urlString: string): boolean {
   }
 }
 
-Deno.serve(async (req) => {
+export async function fetchAllowed(targetUrl: string, fetcher: typeof fetch = fetch): Promise<Response> {
+  let currentUrl = targetUrl;
+  for (let redirects = 0; ; redirects++) {
+    if (!isAllowedUrl(currentUrl) || redirects > 5) {
+      throw new Error('Disallowed URL or too many redirects');
+    }
+    const response = await fetcher(currentUrl, { redirect: 'manual' });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get('location');
+    if (!location) throw new Error('Redirect without location');
+    currentUrl = new URL(location, currentUrl).href;
+    await response.body?.cancel();
+  }
+}
+
+if (typeof Deno !== 'undefined') Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+  if (req.method !== 'GET') {
+    return new Response(null, { status: 405, headers: corsHeaders });
   }
 
   // Rate limiting
@@ -81,16 +99,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const response = await fetch(targetUrl, { redirect: 'follow' });
-
-    // Validate redirect destination
-    const finalUrl = response.url;
-    if (finalUrl !== targetUrl) {
-      const finalHostname = new URL(finalUrl).hostname.toLowerCase();
-      if (!isAllowedHost(finalHostname)) {
-        throw new Error(`Redirect to disallowed host: ${finalHostname}`);
-      }
-    }
+    const response = await fetchAllowed(targetUrl);
 
     if (!response.ok) {
       throw new Error(`Upstream responded with ${response.status}`);
