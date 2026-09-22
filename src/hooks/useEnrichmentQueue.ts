@@ -81,7 +81,7 @@ function extractChapterText(chapter: Chapter, maxChars = 2000): string {
 function tryParseJSON(text: string): any | null {
   const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
   try { return JSON.parse(cleaned); } catch {}
-  const match = cleaned.match(/[\[{][\s\S]*?[\]}]/);
+  const match = cleaned.match(/(?:\[|{)[\s\S]*?(?:\]|})/);
   if (match) { try { return JSON.parse(match[0]); } catch {} }
   return null;
 }

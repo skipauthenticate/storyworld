@@ -20,7 +20,7 @@ function splitIntoSentences(text: string): string[] {
   const abbrevs = /(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|inc|ltd|co|dept|approx|est|vol|no|fig)\./gi;
   
   // Temporarily replace abbreviation dots
-  let processed = text.replace(abbrevs, (match) => match.replace(".", "<<DOT>>"));
+  const processed = text.replace(abbrevs, (match) => match.replace(".", "<<DOT>>"));
   
   // Split on sentence-ending punctuation followed by space + uppercase or quote
   const parts = processed.split(/(?<=[.!?])\s+(?=[A-Z"'\u201C\u2018])/);

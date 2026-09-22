@@ -4,6 +4,8 @@
 
 Storyworld is a browser-based EPUB reader with spoken narration, passage-aware literary chat, and chapter analysis. Its language and voice models run on the reader's device. Import a book, choose a passage, listen, and explore its characters and themes without sending the book to a hosted AI service.
 
+![Storyworld reader showing The Great Gatsby, narration controls, and chapter intelligence](public/storyworld-reader.png)
+
 ## What it does
 
 - **Read your own books.** Import an EPUB, navigate chapters, change text size, and switch between scrolling and page views.

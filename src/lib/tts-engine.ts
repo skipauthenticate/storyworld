@@ -139,17 +139,11 @@ function findPrefix(paths: string[]): string {
 }
 
 async function bootSDK(): Promise<{ TTS: any; SherpaONNXBridge: any; extractTarGz: any }> {
-  let RunAnywhere: any, extractTarGz: any;
-  let ONNX: any, TTS: any, SherpaONNXBridge: any;
-
   const webMod = await import('@runanywhere/web');
-  RunAnywhere = webMod.RunAnywhere;
-  extractTarGz = webMod.extractTarGz;
+  const { RunAnywhere, extractTarGz } = webMod;
 
   const onnxMod = await import('@runanywhere/web-onnx');
-  ONNX = onnxMod.ONNX;
-  TTS = onnxMod.TTS;
-  SherpaONNXBridge = onnxMod.SherpaONNXBridge;
+  const { ONNX, TTS, SherpaONNXBridge } = onnxMod;
 
   SherpaONNXBridge.shared.wasmUrl = new URL('/assets/sherpa-onnx-glue.js', window.location.origin).href;
 

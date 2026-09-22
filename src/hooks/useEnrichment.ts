@@ -64,7 +64,7 @@ function tryParseJSON(text: string): any | null {
   } catch {}
 
   // Try extracting first JSON array or object
-  const match = cleaned.match(/[\[{][\s\S]*?[\]}]/);
+  const match = cleaned.match(/(?:\[|{)[\s\S]*?(?:\]|})/);
   if (match) {
     try {
       return JSON.parse(match[0]);
