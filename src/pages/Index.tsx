@@ -7,7 +7,6 @@ import { IntelligencePanel } from "@/components/storyworld/IntelligencePanel";
 import { WelcomeScreen } from "@/components/storyworld/WelcomeScreen";
 import { useNarration } from "@/hooks/useNarration";
 import { useReadingProgress } from "@/hooks/useReadingProgress";
-import { useAutoResearch } from "@/hooks/useAutoResearch";
 import { useBookLibrary } from "@/hooks/useBookLibrary";
 import { useEnrichmentQueue } from "@/hooks/useEnrichmentQueue";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -77,7 +76,6 @@ const Index = () => {
     }
   }, [activeChapter, enrichment.setReadingChapter]);
 
-  const { triggerImprovement } = useAutoResearch();
 
   const handleChapterEnd = useCallback(() => {
     if (!activeBook || !activeChapter) return;
@@ -210,15 +208,13 @@ const Index = () => {
   const handleSelectChapter = useCallback((chapter: Chapter) => {
     setActiveChapter(chapter);
     setSelectedSentence(null);
-    triggerImprovement("annotations", activeBook ?? undefined);
-  }, [triggerImprovement, activeBook]);
+  }, []);
 
   const handleSelectSentence = useCallback((sentence: Sentence) => {
     setSelectedSentence(sentence);
     const idx = allSentences.findIndex((s) => s.id === sentence.id);
     if (idx >= 0) goToSentence(idx);
-    triggerImprovement("annotations", activeBook ?? undefined);
-  }, [allSentences, goToSentence, triggerImprovement, activeBook]);
+  }, [allSentences, goToSentence]);
 
   const handleTogglePlay = useCallback(() => {
     togglePlay();
