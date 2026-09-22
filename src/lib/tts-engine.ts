@@ -174,7 +174,7 @@ async function loadPiperVoice(voiceKey: PiperVoiceId): Promise<TTSEngine> {
   if (archiveData) {
     console.log(`[STORYWORLD] Voice "${voiceKey}" loaded from cache (${(archiveData.byteLength / 1e6).toFixed(1)}MB)`);
   } else {
-    console.log(`[STORYWORLD] Downloading Piper voice "${voiceKey}" (~64MB)...`);
+    console.log(`[STORYWORLD] Downloading Piper voice "${voiceKey}" (~67MB)...`);
     const response = await fetchWithTimeout(getProxyUrl(config.archiveUrl), DOWNLOAD_TIMEOUT_MS);
     if (!response.ok) throw new Error(`Failed to download TTS archive: ${response.status}`);
 

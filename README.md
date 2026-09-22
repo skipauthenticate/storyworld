@@ -27,7 +27,7 @@ npm ci
 npm run dev
 ```
 
-Open the local address printed by Vite. Import an `.epub` file or select a sample book. Select **Enrich on import** if you want chapter analysis to start at once. The first local language model download is about 350 MB. Each Piper voice download is about 64 MB.
+Open the local address printed by Vite. Import an `.epub` file or select a sample book. Select **Enrich on import** if you want chapter analysis to start at once. The first local language model download is about 430 MB. Each Piper voice download is about 67 MB.
 
 ## How it works
 
@@ -62,7 +62,7 @@ The development server already sends these headers. Check the deployed site in a
 
 ### Optional model download proxy
 
-Storyworld can use the included Supabase Edge Function when a model host blocks a direct browser download. Deploy `supabase/functions/cors-proxy` to your own Supabase project with JWT verification disabled, then set its project URL before the build:
+Storyworld can use the included Supabase Edge Function when a model host blocks a direct browser download. GitHub Releases did not provide browser CORS headers for the Piper voice archive in our check, so configure the proxy if you want Piper narration. Deploy `supabase/functions/cors-proxy` to your own Supabase project with JWT verification disabled, then set its project URL before the build:
 
 ```bash
 cp .env.example .env.local
@@ -70,7 +70,7 @@ cp .env.example .env.local
 npm run build
 ```
 
-The proxy accepts only HTTPS requests to the model hosts in its allowlist. Apply rate limits at the hosting edge before you expose this endpoint to a large audience. You can leave `VITE_SUPABASE_URL` unset when direct downloads work.
+The proxy accepts only HTTPS requests to the model hosts in its allowlist. Apply rate limits at the hosting edge before you expose this endpoint to a large audience. You can leave `VITE_SUPABASE_URL` unset for direct downloads and browser speech.
 
 ## Privacy and limits
 

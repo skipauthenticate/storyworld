@@ -156,7 +156,7 @@ async function manualDownloadAndLoad(LlamaCppBridge: any, TextGeneration: any): 
     updateState({ status: 'loading', progress: 100 });
   } else {
     updateState({ status: 'downloading', progress: 0 });
-    console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B (~350MB)...');
+    console.log('[STORYWORLD LLM] Downloading Qwen2.5-0.5B (~430MB)...');
 
     const response = await fetchWithTimeout(getProxyUrl(MODEL_URL), DOWNLOAD_TIMEOUT_MS);
     if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
@@ -223,7 +223,7 @@ async function manualDownloadAndLoad(LlamaCppBridge: any, TextGeneration: any): 
 }
 
 /**
- * Initialize the on-device LLM. Downloads ~350MB model on first use, caches in OPFS/IndexedDB.
+ * Initialize the on-device LLM. Downloads ~430MB model on first use, caches in OPFS/IndexedDB.
  * Enables WebGPU acceleration when available.
  */
 export async function initLLM(): Promise<boolean> {
