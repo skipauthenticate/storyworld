@@ -31,6 +31,8 @@ Open the local address printed by Vite. Import an `.epub` file or select a sampl
 
 ## How it works
 
+[![Storyworld source map with detected imports](docs/architecture.svg)](https://github.com/skipauthenticate/archcard)
+
 | Part | Role |
 | --- | --- |
 | React, TypeScript, Vite | Reader interface and static build |
