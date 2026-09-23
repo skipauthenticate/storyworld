@@ -31,7 +31,9 @@ Open the local address printed by Vite. Import an `.epub` file or select a sampl
 
 ## How it works
 
-[![Storyworld source map with detected imports](docs/architecture.svg)](https://github.com/skipauthenticate/archcard)
+[![Storyworld source map with detected imports](docs/architecture.svg)](docs/architecture-map.md)
+
+[Made with Archcard](https://github.com/skipauthenticate/archcard). Open the map to see every scanned file and direct local import.
 
 | Part | Role |
 | --- | --- |
